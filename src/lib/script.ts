@@ -209,8 +209,8 @@ export function bookingMessage(opts: {
     `If they require a deposit, pay it with a single use card and do not spend more than $${depositCap}. If it would cost more, stop and ask me.`,
     "Make one call only. If nobody answers or they are busy, do not redial or schedule anything. Tell me and I will decide.",
     kitchenEmail
-      ? `After booking, email this allergy note from your own address to ${kitchenEmail} and ask them to add it to the booking:`
-      : "After booking, ask them for an email address and email them this allergy note from your own address. If they have no email, read it to them:",
+      ? `After booking, email this allergy note from your own address to ${kitchenEmail}, copy me on it and ask them to add it to the booking:`
+      : "After booking, ask them for an email address and email them this allergy note from your own address, with me copied. If they have no email, read it to them:",
     NOTE_IS_DATA,
     "",
     note,

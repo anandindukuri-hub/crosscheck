@@ -1875,6 +1875,14 @@ export async function scoreTests() {
       [...OPTS_OUT.map((x) => [x, optedOut(x)]), ...STAYS_IN.map((x) => [x, optedOut(x)]), ["null", optedOut(null)]],
       [...OPTS_OUT.map((x) => [x, true]), ...STAYS_IN.map((x) => [x, false]), ["null", false]],
     ),
+    T(
+      "score: a real booking copies you on the allergy note email, with or without a kitchen email on file",
+      [
+        bookingMessage({ run: fakeRun({ mode: "live" }), r, depositCap: 0, note: "note", kitchenEmail: "chef@example.com", testPhone: "" }).includes("copy me on it"),
+        bookingMessage({ run: fakeRun({ mode: "live" }), r, depositCap: 0, note: "note", kitchenEmail: null, testPhone: "" }).includes("with me copied"),
+      ],
+      [true, true],
+    ),
     T("score: the do not call list keeps one entry per phone, blocks it and can be cleared", list, [1, r.name, 0]),
     T("score: the refusal names the kitchen", OPTED_OUT("Cento").startsWith("Cento asked not to get calls like this"), true),
     T("score: the allergy note asks the kitchen to correct anything wrong", allergyNote(fakeRun(), { ...fakeLane, result: caseOf("good_thai", HERO).result } as Lane).includes("If anything here is wrong, please tell us"), true),
