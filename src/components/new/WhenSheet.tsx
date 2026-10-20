@@ -7,11 +7,24 @@ import { Button } from "../ui";
 
 type Day = "tonight" | "tomorrow" | "other";
 const DAYS: { value: Day; label: string }[] = [
-  { value: "tonight", label: "Tonight" },
+  { value: "tonight", label: "Today" },
   { value: "tomorrow", label: "Tomorrow" },
   { value: "other", label: "Another day" },
 ];
-const TIMES = ["5 PM", "5:30 PM", "6 PM", "6:30 PM", "7 PM", "7:30 PM", "8 PM", "8:30 PM", "9 PM", "9:30 PM"];
+// every meal of the day, so a table can be breakfast, lunch or dinner
+const MEALS: { label: string; times: string[] }[] = [
+  { label: "Breakfast", times: ["7 AM", "7:30 AM", "8 AM", "8:30 AM", "9 AM", "9:30 AM", "10 AM", "10:30 AM"] },
+  { label: "Lunch", times: ["11 AM", "11:30 AM", "12 PM", "12:30 PM", "1 PM", "1:30 PM", "2 PM", "2:30 PM"] },
+  { label: "Afternoon", times: ["3 PM", "3:30 PM", "4 PM", "4:30 PM"] },
+  { label: "Dinner", times: ["5 PM", "5:30 PM", "6 PM", "6:30 PM", "7 PM", "7:30 PM", "8 PM", "8:30 PM", "9 PM", "9:30 PM"] },
+];
+const TIMES = MEALS.flatMap((m) => m.times);
+const minutesOf = (t: string) => {
+  const m = /^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/.exec(t);
+  return m ? (Number(m[1]) % 12) * 60 + (m[3] === "PM" ? 720 : 0) + Number(m[2] ?? 0) : null;
+};
+// "tonight" for an evening table, "today" for breakfast or lunch, the way Fo says it on the call
+const todayWord = (t: string) => ((minutesOf(t) ?? 0) >= 17 * 60 ? "tonight" : "today");
 
 // "tonight at 7 PM" back into its parts, so the sheet opens where the person left it
 function parse(when: string): { day: Day; date: string; time: string } {
@@ -21,9 +34,9 @@ function parse(when: string): { day: Day; date: string; time: string } {
 }
 
 function label(day: Day, date: string, time: string) {
-  if (day === "tonight") return `tonight at ${time}`;
+  if (day === "tonight") return `${todayWord(time)} at ${time}`;
   if (day === "tomorrow") return `tomorrow at ${time}`;
-  if (!date) return `tonight at ${time}`;
+  if (!date) return `${todayWord(time)} at ${time}`;
   const d = new Date(`${date}T12:00:00`);
   return `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} at ${time}`;
 }
@@ -37,13 +50,11 @@ export function WhenSheet({ open, when, anchor, onClose, onDone }: { open: boole
   const [time, setTime] = useState(start.time);
   const today = new Date();
   const min = new Date(today.getTime() + 2 * 86_400_000).toISOString().slice(0, 10);
-  // tonight, a time that has already gone by (or is under 30 minutes away) cannot be picked
+  // today, a time that has already gone by (or is under 30 minutes away) cannot be picked
   const past = (t: string) => {
     if (day !== "tonight") return false;
-    const m = /^(\d{1,2})(?::(\d{2}))?\s*PM$/.exec(t);
-    if (!m) return false;
-    const mins = (Number(m[1]) % 12) * 60 + 720 + Number(m[2] ?? 0);
-    return mins < today.getHours() * 60 + today.getMinutes() + 30;
+    const mins = minutesOf(t);
+    return mins !== null && mins < today.getHours() * 60 + today.getMinutes() + 30;
   };
   const allPast = TIMES.every(past);
 
@@ -76,8 +87,11 @@ export function WhenSheet({ open, when, anchor, onClose, onDone }: { open: boole
         )}
         <fieldset>
           <legend className="type-footnote mb-2 font-medium text-ink-2">Time</legend>
+          {MEALS.map((meal) => (
+          <div key={meal.label} className="mb-3 last:mb-0">
+          <p className="type-caption mb-1.5 text-ink-2">{meal.label}</p>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-            {TIMES.map((t) => {
+            {meal.times.map((t) => {
               const gone = past(t);
               const on = t === time && !gone;
               return (
@@ -101,7 +115,9 @@ export function WhenSheet({ open, when, anchor, onClose, onDone }: { open: boole
               );
             })}
           </div>
-          {allPast && <p className="type-footnote mt-2 text-ink-2">Every time tonight has passed. Pick tomorrow or another day.</p>}
+          </div>
+          ))}
+          {allPast && <p className="type-footnote mt-2 text-ink-2">Every time today has passed. Pick tomorrow or another day.</p>}
         </fieldset>
       </div>
     </Sheet>

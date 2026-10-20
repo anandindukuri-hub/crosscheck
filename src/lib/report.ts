@@ -76,7 +76,7 @@ export function parseReport(text: string): ParsedReport {
     dishes: field(text, "DISHES"),
     noteOnBooking: splitAnswer(field(text, "NOTE ON BOOKING")).words,
     noteOnBookingLine: field(text, "NOTE ON BOOKING") || null,
-    cookTonight: splitAnswer(field(text, "COOK TONIGHT")).words,
+    cookTonight: splitAnswer(field(text, "COOK (?:TONIGHT|FOR OUR BOOKING)")).words,
     email,
     misc: field(text, "OTHER") || field(text, "NOTES"),
     duration: field(text, "DURATION"),

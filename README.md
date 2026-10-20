@@ -140,6 +140,7 @@ Port 3000 taken? Run `npx next dev -H 127.0.0.1 -p 3001`. Any port on localhost 
 
 - **A table, not a person.** Up to 4 guests with allergies or diets. One call per kitchen covers everyone. Fo asks about the ingredients, the fryer and the cooking gear once each for the whole table, then files a named answer per allergen. A call holds up to 12 checks.
 - **Any allergen.** The 9 major food allergens are choices, each with how serious it is (Life threatening, Severe or Mild). Type up to 3 others per guest, such as mustard. A typed allergen gets the same three questions and the same strict rule. A name a choice already covers, such as shrimp, points you to that choice. A No beef diet can also rule out shared grills and fryers.
+- **Any meal.** Breakfast, lunch or dinner, today or any day from 7 AM to 9:30 PM. Fo tells each kitchen which meal it is and when.
 - **Any US restaurant.** Add a restaurant by name and phone number. It shows under Added by you and you can remove it. Madison, WI quick picks are built in.
 - **Your name on the calls.** The Name for the booking is the name Fo gives on every call, the chef callback, the booking, the reconfirm and the allergy note.
 - **Most likely match first.** Fo calls one kitchen at a time: a kitchen that already matched for this table, then the one whose cuisine overlaps least with your table's allergies, then your order. With "Stop calling once a kitchen matches" on (the default), every kitchen after a true match shows Not called and nothing is sent for it. "Call anyway" calls one after all.

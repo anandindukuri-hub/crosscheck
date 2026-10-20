@@ -66,7 +66,7 @@ import { passResponse } from "../passImage";
 import { callCuisine, callOrder, riskCount, riskFor } from "../risk";
 import { decideLane, previewLane, type Fidelity } from "../rules";
 import { addRestaurant, AddRestaurant, allRestaurants, customRestaurants, findRestaurant, listRestaurants, normalizePhone, phoneProblem, removeRestaurant, RESTAURANT_CUISINE_BAD, RESTAURANT_NAME_BAD, RESTAURANT_PHONE_ABROAD, RESTAURANT_PHONE_BAD, RESTAURANT_PHONE_PAID } from "../restaurants";
-import { AS_DATA, bookingMessage, buildScript, callbackMessage, callerName, callMessage, kitchenWords, opener, reconfirmMessage, replayAsk } from "../script";
+import { AS_DATA, bookingMessage, buildScript, callbackMessage, callerName, callMessage, kitchenWords, mealFor, opener, reconfirmMessage, replayAsk } from "../script";
 import { fidelityFrom, type FidelitySetting } from "../settings";
 import { fail, jsonBody } from "../http";
 import { listRuns } from "../store";
@@ -316,7 +316,7 @@ export function featureTests() {
     T("different dish today is not reconfirmed", compareReconfirm(good, changedDish, clean.b.parsed).status, "not_reconfirmed"),
     T("missing note answer is not reconfirmed", compareReconfirm(good, clean.result, { ...clean.b.parsed, noteOnBooking: null }).status, "not_reconfirmed"),
     T("note words", ["Yes, it's on the booking", "No, I don't see it", "We should have it"].map((w) => !!noteProblem(w)), [false, true, true]),
-    T("reconfirm message asks every code and the note", [thai.every((c) => reconfirmText.includes(`${c.code} (for `)), reconfirmText.includes("NOTE ON BOOKING:"), reconfirmText.includes("COOK TONIGHT:")], [true, true, true]),
+    T("reconfirm message asks every code and the note", [thai.every((c) => reconfirmText.includes(`${c.code} (for `)), reconfirmText.includes("NOTE ON BOOKING:"), reconfirmText.includes("COOK FOR OUR BOOKING:")], [true, true, true]),
     T("risk: thai flags shellfish for Anand and peanut for Guest 2", riskFor("thai", HERO), [{ diner: "Anand", targets: ["shellfish"] }, { diner: "Guest 2", targets: ["peanut"] }]),
     T("risk: burgers flags beef, other flags nothing", [riskFor("burgers", HERO), riskFor("other", HERO)], [[{ diner: "Anand", targets: ["beef"] }], []]),
     T("joinUrl is redacted in exports", redact({ joinUrl: "https://call.example/abc", expiresAt: "soon" }, []), { joinUrl: "[redacted]", expiresAt: "soon" }),
@@ -1883,6 +1883,8 @@ export async function scoreTests() {
       ],
       [true, true],
     ),
+    T("any meal: Fo names breakfast, lunch or dinner from the time, never always dinner", ["today at 8 AM", "tomorrow at 10:30 AM", "today at 11 AM", "Sat, Oct 24 at 12 PM", "tomorrow at 3:30 PM", "tonight at 5 PM", "tonight at 9:30 PM", "sometime"].map(mealFor), ["breakfast", "breakfast", "lunch", "lunch", "lunch", "dinner", "dinner", "meal"]),
+    T("any meal: a lunch table is a lunch on the call, the reconfirm asks who cooks for the booking", [callMessage(fakeRun({ when: "tomorrow at 12:30 PM" }), r, buildChecks(HERO, "thai"), "<FO_TEST_PHONE>").includes("about a lunch tomorrow at 12:30 PM"), reconfirmMessage(fakeRun({ when: "today at 1 PM" }), r, buildChecks(HERO, "thai"), "<FO_TEST_PHONE>").includes("Who is cooking for our booking?"), parseReport('COOK FOR OUR BOOKING: "Chef Ana"').cookTonight], [true, true, "Chef Ana"]),
     T("score: the do not call list keeps one entry per phone, blocks it and can be cleared", list, [1, r.name, 0]),
     T("score: the refusal names the kitchen", OPTED_OUT("Cento").startsWith("Cento asked not to get calls like this"), true),
     T("score: the allergy note asks the kitchen to correct anything wrong", allergyNote(fakeRun(), { ...fakeLane, result: caseOf("good_thai", HERO).result } as Lane).includes("If anything here is wrong, please tell us"), true),

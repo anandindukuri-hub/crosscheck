@@ -149,7 +149,7 @@ export function LaneActions({
       primary = pass(true);
       secondary = (
         <p className="type-footnote text-center text-ink-2">
-          {w.opens ? `Reconfirm after ${clockText(w.opens).replace(":00", "")}, when tonight’s cook is in.` : "Reconfirm on the day, when tonight’s cook is in."}{" "}
+          {w.opens ? `Reconfirm after ${clockText(w.opens).replace(":00", "")}, when the cook for your table is in.` : "Reconfirm on the day, when the cook for your table is in."}{" "}
           <button type="button" onClick={() => act({ action: "reconfirm" })} disabled={busy} className="inline-flex min-h-11 items-center font-medium text-link hover:underline disabled:text-ink-3">
             Reconfirm now
           </button>

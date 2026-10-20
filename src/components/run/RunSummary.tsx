@@ -233,7 +233,7 @@ export function BestMatch({
                 </Link>
                 {canReconfirm && (
                   <div className="type-footnote mt-2 text-center text-ink-2">
-                    <p className="[text-wrap:balance]">{opens ? `Reconfirm after ${clockText(opens).replace(":00", "")}, when tonight’s cook is in.` : "Reconfirm on the day, when tonight’s cook is in."}</p>
+                    <p className="[text-wrap:balance]">{opens ? `Reconfirm after ${clockText(opens).replace(":00", "")}, when the cook for your table is in.` : "Reconfirm on the day, when the cook for your table is in."}</p>
                     <button type="button" onClick={() => act({ action: "reconfirm" })} disabled={busy} className="mx-auto flex min-h-11 w-fit items-center px-2 font-medium text-link hover:underline disabled:text-ink-3">
                       Reconfirm now
                     </button>
