@@ -1223,8 +1223,8 @@ export function roundTests() {
     T("fidelity: the shipped unverified line never blocks a passed calibration, force_unverified holds it from the env", [envFid("unverified", passed), envFid("", passed), envFid("force_unverified", passed), envFid("unverified", null)], [["verified", "calibration"], ["verified", "calibration"], ["unverified", "env"], ["unverified", null]]),
     T("fidelity: only a passed calibration verifies, the env never does", [fid(false, null), fid(false, failed), fid(false, passed), fid(true, passed)], [["unverified", null], ["unverified", null], ["verified", "calibration"], ["unverified", "env"]]),
 
-    T("speaker: a cook's answer on the beef diet goes to the chef, never passes or fails", cook(HERO, "hidden:beef"), ["needs_chef", "escalate", "other_staff", true]),
-    T("speaker: a cook's answer on a mild allergy goes to the chef too", cook(intolerant, "hidden:peanut"), ["needs_chef", "escalate", "other_staff", true]),
+    T("speaker: a cook who answers first hand counts, on the beef diet too", cook(HERO, "hidden:beef"), ["matched", "pass", "other_staff", false]),
+    T("speaker: a cook who answers first hand counts on a mild allergy too", cook(intolerant, "hidden:peanut"), ["matched", "pass", "other_staff", false]),
     T("speaker: every check needs the chef or manager first hand, memory from a cook is never reused", [buildChecks(intolerant, "burgers").every((c) => c.strictSpeaker), !!findMemory({ records: [], kitchens: [mem] }, q), !!findMemory({ records: [], kitchens: [cookMem] }, q)], [true, true, false]),
     T("speaker: severity still makes a new table in kitchen memory", tableKey(buildChecks(intolerant, "thai")) === tableKey(thai), false),
 
@@ -1499,7 +1499,7 @@ export function customTests() {
       true,
       true,
     ]),
-    T("custom checks: judged by the same rule (clean match, hedge and a cook go to the chef, a clear unsafe lead rules out)", [decide().state, hedged, cooked, unsafeLead], ["matched", "needs_chef", "needs_chef", "not_matched"]),
+    T("custom checks: judged by the same rule (clean match, a hedge goes to the chef, a cook's first hand answer counts, a clear unsafe lead rules out)", [decide().state, hedged, cooked, unsafeLead], ["matched", "needs_chef", "matched", "not_matched"]),
     T("custom checks: a guest with a built in and a typed allergen gets both, merged across guests", [
       buildChecks([...ana([{ kind: "allergy", allergen: "peanut", severity: "severe" }, { kind: "custom", name: "mustard", severity: "severe" }]), { id: "g2", label: "Ben", restrictions: [{ kind: "custom", name: "Mustard", severity: "intolerance" }] }], "thai").filter((c) => c.target === "custom_mustard").map((c) => [c.dinerIds, c.ttlDays]),
     ], [[[["g1", "g2"], 7], [["g1", "g2"], 7], [["g1", "g2"], 7]]]),
@@ -1945,5 +1945,39 @@ export async function openerTests() {
     ], [null, ["declined", "Said no to the call", "rule"]]),
     T("handoff: a yes gives the time they named, a no or not asked gives nothing", ["yes, after 3 PM", "Yes after 2:30", "\"Yes\"", "no", "not asked", "", null].map(personMayCall), ["after 3 PM", "after 2:30", "any time", null, null, null, null]),
     T("handoff: calling yourself uses the same questions Fo would ask", [humanQuestions(HERO, checks).length, humanQuestions(HERO, checks)[1].startsWith("Is there any shellfish or beef in Anand's dishes")], [5, true]),
+  ];
+}
+
+// whoever picks up may answer, and Jev settles a clear report on its own
+export async function readerTests() {
+  const { jevDecides } = await import("../rules");
+  const clean = buildCase(CASES[0], HERO, "thai");
+  const withAnswer = (line: string) => {
+    const c = clean.checks[0];
+    const a = parseReport(`${c.code} (x): ${line}`).answers[c.code];
+    return { ...clean.parsed, answers: { ...clean.parsed.answers, [c.code]: a } };
+  };
+  const state = (parsed: ReturnType<typeof withAnswer>) => decideLane({ checks: clean.checks, diners: HERO, parsed, decisions: clean.decisions, judgement: null, fidelity: "verified", now: AT }).state;
+  const all = calibrationReport(buildChecks(HERO, "thai"), Object.fromEntries(buildChecks(HERO, "thai").map((c) => [c.key, { who: "the respondent" }])));
+  const cal = evaluateCalibration(all, buildChecks(HERO, "thai"));
+  return [
+    T("speaker: the person who picked up counts, an answer passed on or a recording goes to the chef", [
+      state(withAnswer('"There is no shellfish in those dishes" (the person who answered)')),
+      state(withAnswer('"There is no shellfish in those dishes" (host, after checking with the chef)')),
+      state(withAnswer('"There is no shellfish in those dishes" (automated system)')),
+    ], ["matched", "needs_chef", "needs_chef"]),
+    T("speaker: a host or server answering directly is first hand, relay words still make it passed on", [
+      mapSpeaker("host", "We use a separate fryer"),
+      mapSpeaker("server", "No peanut in that dish"),
+      mapSpeaker("host, checked with the chef", "No peanut in that dish"),
+      mapSpeaker("host", "The chef says there is no peanut"),
+      mapSpeaker("server (asked kitchen)", "No peanut"),
+      state(withAnswer('"There is no shellfish in those dishes" (host)')),
+    ], ["other_staff", "other_staff", "relayed", "relayed", "relayed", "matched"]),
+    T("jev first: a clear report is settled by Jev alone, a hedge brings Claude in", [
+      jevDecides({ checks: clean.checks, diners: HERO, parsed: clean.parsed, decisions: clean.decisions }),
+      jevDecides({ checks: clean.checks, diners: HERO, parsed: withAnswer('"I think there is no shellfish" (chef)'), decisions: clean.decisions }),
+    ], [true, false]),
+    T("practice call: answers marked as the respondent count as first hand, only passed on or recorded answers fail it", [cal.signals.firstHand], [true]),
   ];
 }

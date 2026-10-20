@@ -57,7 +57,7 @@ import { CALL_ENDED, parseReport, selfCallback } from "./report";
 import { busy, hold, newRegistry, type Registry } from "./queue";
 import { findRestaurant, normalizePhone } from "./restaurants";
 import { callCuisine, callOrder, riskCount } from "./risk";
-import { decideLane, previewLane, quickOutcome, refusedTheCall, type Fidelity } from "./rules";
+import { decideLane, jevDecides, previewLane, quickOutcome, refusedTheCall, type Fidelity } from "./rules";
 import { bookingMessage, callbackMessage, callMessage, reconfirmMessage, replayAsk } from "./script";
 import { currentFidelity, saveFidelity } from "./settings";
 import { listRuns, loadLane, loadLanes, loadRun, saveLane, saveRun } from "./store";
@@ -884,14 +884,11 @@ export function withOpening(result: LaneResult, text: string): LaneResult {
 async function weigh(run: Run, lane: Lane, relevant: CheckInstance[], parsed: ParsedReport, text: string, onJev?: (d: Decisions) => Promise<unknown>) {
   const runId = run.id;
   const laneId = lane.id;
-  let claudeDone = false;
-  const claudeP = claudeJudge({ runId, laneId, restaurant: lane.restaurant, diners: run.diners, checks: relevant, parsed, raw: text })
-    .catch(async (e) => {
+  // started only when needed: Jev alone settles most reports in a fraction of a second
+  const claudeP = () =>
+    claudeJudge({ runId, laneId, restaurant: lane.restaurant, diners: run.diners, checks: relevant, parsed, raw: text }).catch(async (e) => {
       await mutate(runId, laneId, (l) => addEvent(l, "warning", `Claude could not weigh in: ${e instanceof Error ? e.message : e}`));
       return null;
-    })
-    .finally(() => {
-      claudeDone = true;
     });
   const jevRun = () =>
     jevDecide({
@@ -902,10 +899,10 @@ async function weigh(run: Run, lane: Lane, relevant: CheckInstance[], parsed: Pa
       checks: relevant,
     });
 
-  let judgement: Awaited<typeof claudeP> = null;
+  let judgement: Awaited<ReturnType<typeof claudeP>> = null;
   let jev: { ok: true; d: Decisions } | { ok: false; e: unknown } | null = null;
   if (parsed.format === "freeform" || !env.jevKey()) {
-    judgement = await claudeP;
+    judgement = await claudeP();
     if (parsed.format === "freeform" && judgement) {
       for (const c of relevant) {
         const q = judgement.checks[c.key];
@@ -914,15 +911,14 @@ async function weigh(run: Run, lane: Lane, relevant: CheckInstance[], parsed: Pa
     }
     if (env.jevKey()) jev = await jevRun().then((d) => ({ ok: true as const, d }), (e: unknown) => ({ ok: false as const, e }));
   } else {
-    const jevP = jevRun().then(
-      async (d) => {
-        // a preview only helps while Claude is still reading; a failed save never stops the real decision
-        if (!claudeDone && onJev) await onJev(d).catch(() => undefined);
-        return { ok: true as const, d };
-      },
-      (e: unknown) => ({ ok: false as const, e }),
-    );
-    [judgement, jev] = await Promise.all([claudeP, jevP]);
+    // Jev first. When it settles the kitchen on its own the decision is made now; otherwise Claude reads too
+    jev = await jevRun().then((d) => ({ ok: true as const, d }), (e: unknown) => ({ ok: false as const, e }));
+    const prior = lane.phase === "callback" ? lane.result : null;
+    if (!(jev.ok && jevDecides({ checks: relevant, diners: run.diners, parsed, decisions: jev.d, prior }))) {
+      // a preview only helps while Claude is still reading; a failed save never stops the real decision
+      if (jev.ok && onJev) await onJev(jev.d).catch(() => undefined);
+      judgement = await claudeP();
+    }
   }
 
   let decisions: Decisions;

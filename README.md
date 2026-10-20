@@ -8,7 +8,7 @@ The fries have no shrimp in them. They can still fry in the same oil as the shri
 
 - **Fo** (Wajo's AI caller, used through its MCP server) phones each restaurant. It opens with who it is calling for and why, then says it is an AI assistant, before it asks anything. Then it asks the chef about hidden ingredients, the fryer and shared pans for every guest.
 - **Claude** reads every answer and quotes the kitchen's words as Fo wrote them in its report. **Jev** (TypeSafe AI's confidence model) turns each answer into a typed choice and says how sure it is, from 0 to 1.
-- **Plain code decides.** A check passes only when Jev picks a passing answer at 0.9 confidence or higher, Claude agrees, the chef or manager said it first hand, nothing was hedged and the kitchen confirmed Fo's read back.
+- **Plain code decides.** A check passes only when Jev picks a passing answer at 0.9 confidence or higher, the person who answered said it first hand, nothing was hedged and the kitchen confirmed Fo's read back.
 - **You approve every call and the booking.** Fo books only a kitchen that cleared every check. It sends the kitchen a written allergy note with the answers its staff gave. You get a table pass to show your server.
 
 Built by Anand Indukuri for the Wajo x Anthropic Get Sh\*t Done hackathon, October 2026.
@@ -17,15 +17,16 @@ Built by Anand Indukuri for the Wajo x Anthropic Get Sh\*t Done hackathon, Octob
 
 Models never decide. Claude and Jev return typed answers and `src/lib/rules.ts` applies one rule. For each allergy or diet, Fo asks about up to three things: hidden ingredients, the fryer and shared pans.
 
-**A check passes only when all five hold:**
+**A check passes only when all four hold:**
 
 1. Jev picks a passing answer at 0.9 confidence or higher.
-2. Claude reads the answer the same way.
-3. The chef or manager said it first hand. An answer passed on from other staff goes to the chef.
-4. Nothing is hedged. Jev's separate "is this answer hedged?" score is under 0.20 and the words have no hedge such as "I think" or "usually".
-5. The kitchen confirmed Fo's read back.
+2. Whoever answered the phone said it first hand. An answer passed on from someone else goes to the chef. So does a recording.
+3. Nothing is hedged. Jev's separate "is this answer hedged?" score is under 0.20 and the words have no hedge such as "I think" or "usually".
+4. The kitchen confirmed Fo's read back.
 
-**A kitchen matches only when** every check passes for every guest, the chef or manager clearly answered the call, the kitchen said it can accommodate the table and it named dishes for each guest.
+**Jev first, Claude when it matters.** Jev reads the report in a fraction of a second. When it is at least 0.9 sure on every answer (a clear match or a clear rule out) the rule decides at once. When Jev is less sure about anything, Claude reads the whole report too. A check then passes only if Claude reads it the same way.
+
+**A kitchen matches only when** every check passes for every guest, the kitchen said it can accommodate the table and it named dishes for each guest.
 
 **Ruling out and asking the chef:**
 

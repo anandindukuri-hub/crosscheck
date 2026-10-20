@@ -102,7 +102,8 @@ export function evaluateCalibration(text: string, checks: CheckInstance[]): { st
     hedge: /\bi think\b/i.test(words(HEDGE_KEY)),
     relay: relay?.speaker === "relayed" || /let me ask|they say/i.test(relay?.words ?? ""),
     sharedFryer: SHARED_FRYER.test(words(SHARED_KEY)),
-    firstHand: others.filter((c) => p.answers[c.code]?.speaker === "chef_or_manager").length >= 3,
+    // whoever picks up may answer: the report must not mark first hand answers as passed on or automated
+    firstHand: others.filter((c) => !!p.answers[c.code]?.words && !["relayed", "automated"].includes(p.answers[c.code]!.speaker)).length >= 3,
   };
   const missing = (Object.keys(signals) as (keyof CalibrationSignals)[]).filter((k) => !signals[k]);
   return { status: missing.length ? "failed" : "verified", signals, missing };

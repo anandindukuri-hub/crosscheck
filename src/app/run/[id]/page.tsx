@@ -13,7 +13,7 @@ import { FoConversations } from "@/components/run/FoConversations";
 import { laneFlags, SETTLED, type LaneView } from "@/components/run/laneState";
 import { GroupAsk, LaneList, sameOpener } from "@/components/run/LaneList";
 import { LiveActivity } from "@/components/run/LiveActivity";
-import { AlertsRow, NeedsYouAlerts } from "@/components/run/NeedsYouAlerts";
+import { AlertsRow, MatchAlert, NeedsYouAlerts } from "@/components/run/NeedsYouAlerts";
 import { bySeverity, guestNeeds, sortNeeds } from "@/components/run/plain";
 import { BestMatch, bestMatch, RunSummary } from "@/components/run/RunSummary";
 import { StopControls } from "@/components/run/StopControls";
@@ -179,6 +179,7 @@ export default function RunPage() {
   return (
     <div className="wrap pb-20">
       <NeedsYouAlerts waiting={waiting} baseTitle={`${title} · CrossCheck`} />
+      {run.mode !== "replay" && <MatchAlert matches={lanes.filter((l) => (l.result?.state === "matched" || l.result?.state === "needs_review") && !l.booking).map((l) => ({ id: l.id, name: l.restaurant.name, review: l.result?.state === "needs_review" }))} />}
       {approved && <LiveActivity lanes={lanes} replay={run.mode === "replay"} onOpen={setOpenId} />}
 
       <div className="flex flex-col pt-10 md:pt-12 lg:grid lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:items-start lg:gap-x-12 lg:pt-16 xl:gap-x-16">

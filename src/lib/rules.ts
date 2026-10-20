@@ -85,12 +85,11 @@ function judgeCheck(
             : `Jev's top pick "${d.choice}" is not a passing answer`,
     );
   }
-  if (!cj) reasons.push("Claude did not weigh in");
-  else if (claudeOutcome !== "pass")
-    reasons.push(`Claude read it as "${cj.option}", Jev as "${d.choice}"`);
+  // Jev at 0.9 decides on its own. Claude reads only when Jev is unsure somewhere, and then it must agree too
+  if (cj && claudeOutcome !== "pass") reasons.push(`Claude read it as "${cj.option}", Jev as "${d.choice}"`);
   if (!words) reasons.push("No exact words from the kitchen");
-  // Anand's rule for every check: the chef or manager said it first hand. A cook's answer goes to the chef, it never fails
-  if (speaker !== "chef_or_manager") reasons.push(`Not first hand from the chef or manager (${speaker.replace(/_/g, " ")})`);
+  // whoever picks up may answer first hand. An answer passed on from someone else, or a recording, goes to the chef
+  if (speaker === "relayed" || speaker === "automated") reasons.push(`Not first hand: ${speaker === "relayed" ? "passed on from someone else" : "an automated system"}`);
   const ph = decisions.hedge[c.key];
   if (ph === undefined || ph >= HEDGE_MAX) reasons.push(ph === undefined ? "Hedge not checked" : `Sounds hedged (${pct(ph)})`);
   // the whole C line too, so a hedge outside the quoted words still counts
@@ -206,7 +205,6 @@ export function decideLane(opts: {
 
   // 4. Call wide gates
   if (oc.choice !== "answered" || oc.confidence < THRESHOLD) reasons.push("It is not clear how the call ended");
-  if (!okAt(decisions.respondent, "chef_or_manager")) reasons.push("The chef or manager did not clearly answer");
   const acc = decisions.accommodate;
   const cannot = acc.choice === "cannot" && acc.confidence >= THRESHOLD;
   if (!cannot && !okAt(acc, "can")) reasons.push("Not clear the kitchen can make food for this table");
@@ -236,6 +234,13 @@ export function decideLane(opts: {
     return out("needs_review", "Needs your review", verdicts, dishes);
   }
   return out("matched", "Matched your checks", verdicts, dishes);
+}
+
+// Jev alone settles the kitchen (every answer clearly passes, or one clearly fails), so Claude is not needed. Anything
+// less clear and Claude reads the report too
+export function jevDecides(opts: { checks: CheckInstance[]; diners: Diner[]; parsed: ParsedReport; decisions: Decisions; prior?: LaneResult | null }): boolean {
+  const r = decideLane({ ...opts, judgement: null, fidelity: "verified" });
+  return r.state === "matched" || r.state === "not_matched";
 }
 
 // Claude reading every answer exactly the way Jev did, with the report's own quotes and speakers

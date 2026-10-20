@@ -96,3 +96,28 @@ export function NeedsYouAlerts({ waiting, baseTitle }: { waiting: Waiting[]; bas
     </p>
   );
 }
+
+// a notification and screen reader line the moment a kitchen passes every check, so Book is never missed
+export function MatchAlert({ matches }: { matches: { id: string; name: string; review: boolean }[] }) {
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const ids = new Set(matches.map((m) => m.id));
+    const before = seen.current;
+    seen.current = ids;
+    if (!before || getPerm() !== "granted" || (!document.hidden && document.hasFocus())) return;
+    for (const m of matches) {
+      if (before.has(m.id)) continue;
+      const n = new Notification(`All checks passed: ${m.name}`, { body: m.review ? "Read each quote, then tap Book to have Fo call back and reserve." : "Tap Book to have Fo call back and reserve the table.", tag: `cc-match-${m.id}` });
+      n.onclick = () => {
+        window.focus();
+        location.hash = `lane-${m.id}`;
+        n.close();
+      };
+    }
+  }, [matches]);
+  return (
+    <p className="sr-only" aria-live="polite">
+      {matches.length ? `All checks passed for ${listJoin(matches.map((m) => m.name))}. Book is ready.` : ""}
+    </p>
+  );
+}

@@ -11,17 +11,19 @@ export function hedgeWords(text: string | null): string | null {
 }
 
 // in the speaker note: any sign the answer came second hand
-const RELAY_WORDS = /\b(asked the|checked with|confirmed with|after checking|via|through|on behalf|passed on|relay|for the kitchen)/i;
+const RELAY_WORDS = /\b(asked the|asked (a |our )?(kitchen|chef|cook|manager)|checked with|confirmed with|after checking|via|through|on behalf|passed on|relay|for the kitchen)/i;
 // in the quote itself: only explicit relay phrases ("we run it through a separate fryer" is first hand)
 const RELAY_QUOTE = /\b(kitchen says|the chef says|chef said|they say|they said|he says|she says|i was told|let me (ask|check)|i asked (the|our))\b/i;
 const FRONT = /\b(host|hostess|server|waiter|waitress|bartender|front of house|cashier|receptionist)\b/;
 
-// Front of house and relay words win over "chef": "host, after checking with the chef" is relayed
+// Relay words win over every role: "host, after checking with the chef" is relayed. A host or server answering
+// directly is staff answering first hand
 export function mapSpeaker(raw: string, words: string | null): Speaker {
   const s = raw.toLowerCase();
   if (/automat|recording|\bbot\b|phone menu|ivr|ai receptionist|voicemail/.test(s)) return "automated";
-  if (FRONT.test(s) || RELAY_WORDS.test(s)) return "relayed";
+  if (RELAY_WORDS.test(s)) return "relayed";
   if (words && RELAY_QUOTE.test(words)) return "relayed";
+  if (FRONT.test(s)) return "other_staff";
   if (/\b(chef|sous|kitchen manager|manager|owner|gm)\b/.test(s)) return "chef_or_manager";
   if (/\b(cook|line|staff|employee|worker)\b/.test(s)) return "other_staff";
   return "unknown";
