@@ -1,4 +1,4 @@
-import { hedgeWords, stricterSpeaker } from "./report";
+import { CALL_ENDED, hedgeWords, stricterSpeaker } from "./report";
 import type {
   CheckInstance,
   CheckVerdict,
@@ -98,6 +98,44 @@ function judgeCheck(
   if (hw) reasons.push(`Hedge word: "${hw}"`);
 
   return { ...base, jev, claude, outcome: reasons.length ? "escalate" : "pass", reasons };
+}
+
+// A first call that clearly ended with no allergy answers (they said no, voicemail, busy, a phone menu) is decided at
+// once, without waiting on Claude and Jev, so the next kitchen is called right away. It can only end as Declined or
+// No answer, never as a match, so skipping the readers can never book a kitchen
+const ALLERGY_TALK = /\b(peanut|shellfish|shrimp|beef|gluten|wheat|fryer|oil|allerg|ingredient|sauce|dish|wok|nut|milk|egg|soy|sesame|fish)/i;
+const SAID_NO = /\b(declin|refus|not interested|hung up|did ?n['’]?t want|don['’]?t (take|do|want) (ai|robot|automated)|no ai)\w*/i;
+// "we can't accommodate a severe shellfish allergy" is an answer about the food, not a no to the call
+export const CANT_ACCOMMODATE = /\b(can['’]?t|cannot|can not|not able to|unable to) (accommodate|guarantee)\b/i;
+// a declined call goes on the do not call list only when the no was to the call itself, never a "can't accommodate"
+export const refusedTheCall = (report: string) => !CANT_ACCOMMODATE.test(report);
+export function quickOutcome(parsed: ParsedReport, text: string, decidedAt: string): LaneResult | null {
+  if (Object.values(parsed.answers).some((a) => a.words)) return null;
+  // a CALL OUTCOME line decides when there is one (a short report with no answer lines still has it). Anything said
+  // about the food in the outcome or OTHER line goes to Claude and Jev instead
+  const structured = !!parsed.outcomeRaw.trim();
+  const freeform = !structured && text.length < 600 && CALL_ENDED.test(text) && !ALLERGY_TALK.test(text);
+  if (!structured && !freeform) return null;
+  const oc = (structured ? parsed.outcomeRaw : text).trim();
+  const said = structured ? oc : text;
+  const base = { checks: [], dishes: [], decider: "rule" as const, decidedAt, misconception: 0 };
+  // a call nobody really answered stays No answer, whatever words follow ("voicemail: sorry, we can't make it")
+  const unanswered = /^\W*(voicemail|no answer|busy|automated)\b/i.test(oc);
+  if (!unanswered && CANT_ACCOMMODATE.test(said))
+    return { ...base, state: "not_matched", headline: "Said they cannot accommodate", reasons: [`They said they cannot accommodate the table's needs${structured ? `: ${oc}` : "."}`] };
+  if (structured && (ALLERGY_TALK.test(oc.replace(/^\W*\w+/, "")) || ALLERGY_TALK.test(parsed.misc))) return null;
+  if (/^\W*declined\b/i.test(oc) || (!structured && SAID_NO.test(said))) {
+    // their words decide the label, never Fo's own "I'm an AI assistant"
+    const ai = /\b(ai|robot|automated|machine)\b/i.test(said.replace(/\bAI assistant\b/gi, ""));
+    return { ...base, state: "declined", headline: ai ? "Said no to an AI call" : "Said no to the call", reasons: [ai ? "They did not want to talk with an AI." : "They said no to the call.", "Nothing was asked and nothing will be booked."] };
+  }
+  if (/^\W*(voicemail|no answer)\b/i.test(oc) || (!structured && /voicemail|no answer|nobody (picked up|answered)|no one (picked up|answered)|did ?n['’]?t (pick up|answer)/i.test(said)))
+    return { ...base, state: "no_answer", headline: "No answer yet", reasons: ["No one answered"] };
+  if (/^\W*busy\b/i.test(oc) || (!structured && /\bbusy\b/i.test(said)))
+    return { ...base, state: "no_answer", headline: "No answer yet", reasons: [`Busy, asked to call back${structured ? `: ${oc}` : ""}`] };
+  if (/^\W*automated\b/i.test(oc) || (!structured && /automated (system|menu)|phone menu/i.test(said)))
+    return { ...base, state: "no_answer", headline: "No answer yet", reasons: ["Reached an automated system, not a person"] };
+  return null;
 }
 
 export function decideLane(opts: {

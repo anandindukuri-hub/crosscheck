@@ -82,6 +82,7 @@ export type ParsedReport = {
   cookTonight: string | null; // reconfirm only
   email: string | null;
   optOut?: string; // first call, MORE CALLS OK: a "no" means the kitchen asked not to be called again
+  personCall?: string; // first call, PERSON MAY CALL: after a no to an AI call, may a person call and when
   misc: string;
   duration: string;
 };
@@ -94,7 +95,7 @@ export type ChoiceDecision = {
 };
 
 export type Decisions = {
-  decider: "jev" | "claude_only";
+  decider: "jev" | "claude_only" | "rule"; // rule: a call that clearly ended with no answers, decided at once
   model: string;
   checks: Record<string, ChoiceDecision>; // by check key
   hedge: Record<string, number>; // P(hedged) by check key
@@ -195,6 +196,7 @@ export type Lane = {
   stopPending?: { conversationId: string; text: string; at: string } | null; // a stop saved before ask_fo, sent again once after a restart
   foCallback?: { text: string; at: string; cancelled?: string | null } | null; // Fo said it would call them again on its own
   stoppedAt?: string | null; // Stop all calls reached this lane, so nothing queued for it goes out
+  handoff?: { text: string; at: string } | null; // they said no to an AI call but a person may call: their words and time
   preview?: LanePreview | null; // Jev's answer while Claude still weighs in. Cleared when the real result lands
   events: LaneEvent[];
   startedAt: string | null;

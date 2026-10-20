@@ -2,7 +2,7 @@
 
 import type { CheckInstance, Run } from "@/lib/types";
 import { definitions } from "@/lib/checks";
-import { callerName, opener } from "@/lib/script";
+import { opener } from "@/lib/script";
 import { Disclosure } from "../kit/Disclosure";
 import { useDevMode } from "../useDevMode";
 import { smart } from "../kit/typo";
@@ -32,7 +32,7 @@ export function ScriptView({ run, lane, script }: { run: Run; lane: LaneView; sc
     <div className="space-y-7 text-[17px] leading-[1.47]">
       <section>
         <H>Fo opens with</H>
-        <p className="text-ink">“{smart(opener(callerName(run)))}”</p>
+        <p className="text-ink">“{smart(opener(run))}”</p>
       </section>
 
       <section>

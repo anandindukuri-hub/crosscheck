@@ -73,6 +73,7 @@ export function parseReport(text: string): ParsedReport {
     answers,
     readback: field(text, "READBACK"),
     optOut: field(text, "MORE CALLS OK"),
+    personCall: field(text, "PERSON MAY CALL"),
     dishes: field(text, "DISHES"),
     noteOnBooking: splitAnswer(field(text, "NOTE ON BOOKING")).words,
     noteOnBookingLine: field(text, "NOTE ON BOOKING") || null,
@@ -131,7 +132,7 @@ function isReport(t: string) {
   const outcome = field(t, "CALL OUTCOME");
   if (!outcome || outcome.includes(" / ")) return false;
   const p = parseReport(t);
-  return Object.values(p.answers).some((a) => a.words) || /voicemail|declined|busy|automated|no answer/i.test(outcome);
+  return Object.values(p.answers).some((a) => a.words) || /voicemail|declined|accommodate|busy|automated|no answer/i.test(outcome);
 }
 
 // What a finished Fo turn means for the lane. Unknown replies go to Anand, never to the checks.

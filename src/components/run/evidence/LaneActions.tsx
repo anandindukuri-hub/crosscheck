@@ -4,7 +4,7 @@ import { CalendarCheck, ChefHat, ChevronsUpDown, Phone, RotateCcw, Wallet } from
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { agreedBoxShown } from "@/lib/lanes";
-import { callerName } from "@/lib/script";
+import { callerName, humanQuestions } from "@/lib/script";
 import type { Run } from "@/lib/types";
 import { buttonClass } from "../../kit/button";
 import { Spinner } from "../../kit/Spinner";
@@ -36,6 +36,7 @@ export const hasActions = (lane: LaneView, f: LaneFlags, approved: boolean) =>
   f.canCallAnyway ||
   (approved && !f.replay) ||
   lane.result?.state === "no_answer" ||
+  lane.result?.state === "declined" ||
   lane.result?.state === "not_matched";
 
 const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
@@ -206,6 +207,30 @@ export function LaneActions({
         </Button>
       );
     }
+  } else if (state === "declined" && !f.running) {
+    // they said no to the AI call: you can still call them yourself, with the same questions Fo would have asked
+    if (lane.handoff) helper = `They said a person may call: ${lane.handoff.text}.`;
+    primary = dialable(lane.restaurant.phone) ? (
+      <a href={telHref(lane.restaurant.phone)} className={`${buttonClass("primary", "lg")} w-full`}>
+        <Phone size={20} strokeWidth={1.75} aria-hidden />
+        Call {name} yourself
+      </a>
+    ) : (
+      <Button size="lg" className="w-full" onClick={onClose}>
+        Back to your kitchens
+      </Button>
+    );
+    secondary = (
+      <details className="w-full text-left">
+        <summary className="type-callout min-h-11 cursor-pointer py-2 font-medium text-link">What to ask them</summary>
+        <ol className="type-callout list-decimal space-y-2 pb-2 pl-5 text-ink">
+          {humanQuestions(run.diners, run.checks[lane.id] ?? []).map((q) => (
+            <li key={q}>{q}</li>
+          ))}
+        </ol>
+      </details>
+    );
+    caption = "CrossCheck will not call them again. Their answers on your own call are not checked by the app.";
   } else if (state === "not_matched" && !f.running) {
     primary = (
       <Button size="lg" variant="tinted" className="w-full" onClick={onClose}>

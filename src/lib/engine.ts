@@ -57,7 +57,7 @@ import { CALL_ENDED, parseReport, selfCallback } from "./report";
 import { busy, hold, newRegistry, type Registry } from "./queue";
 import { findRestaurant, normalizePhone } from "./restaurants";
 import { callCuisine, callOrder, riskCount } from "./risk";
-import { decideLane, previewLane, type Fidelity } from "./rules";
+import { decideLane, previewLane, quickOutcome, refusedTheCall, type Fidelity } from "./rules";
 import { bookingMessage, callbackMessage, callMessage, reconfirmMessage, replayAsk } from "./script";
 import { currentFidelity, saveFidelity } from "./settings";
 import { listRuns, loadLane, loadLanes, loadRun, saveLane, saveRun } from "./store";
@@ -846,6 +846,17 @@ async function decide(runId: string, laneId: string, text: string) {
     await addDoNotCall(lane.restaurant, run.id);
     await mutate(runId, laneId, (l) => addEvent(l, "warning", `${l.restaurant.name} asked not to get calls like this again. CrossCheck will not call them again, not even to book.`));
   }
+  // a first call that clearly ended with no answers is decided now, so the queue moves to the next kitchen at once
+  const quick = run.purpose !== "calibration" && lane.phase === "call" ? quickOutcome(parsed, text, now()) : null;
+  if (quick) {
+    const later = quick.state === "declined" ? personMayCall(parsed.personCall) : null;
+    if (later) {
+      await mutate(runId, laneId, (l) => void (l.handoff = { text: later, at: now() }));
+      quick.reasons.push(`A person may call them instead: ${later}.`);
+    }
+    await trace({ runId, laneId, actor: "engine", action: "quick_outcome", output: { state: quick.state }, ok: true });
+    return finishDecision(runId, laneId, withOpening(quick, text), parsed.email);
+  }
   if (lane.phase === "reconfirm") return decideReconfirm(run, lane, parsed, text);
   const prior = lane.phase === "callback" ? lane.result : null;
   const openKeys = new Set((prior?.checks ?? []).filter((v) => v.outcome !== "pass").map((v) => v.key));
@@ -975,6 +986,13 @@ async function saveToLedger(run: Run, lane: Lane, result: LaneResult) {
   );
 }
 
+// PERSON MAY CALL: "yes, after 3 PM" gives "after 3 PM"; a no, not asked or nothing gives null
+export function personMayCall(field: string | undefined | null): string | null {
+  const m = /^\s*\**\s*["“]?\s*yes\b[\s,.:;"”-]*(.*)$/i.exec(field ?? "");
+  if (!m) return null;
+  return m[1].replace(/["”]\s*$/, "").trim() || "any time";
+}
+
 async function finishDecision(runId: string, laneId: string, result: NonNullable<Lane["result"]>, email: string | null) {
   const lane = await mutate(runId, laneId, (l) => {
     landResult(l, result, email);
@@ -983,6 +1001,8 @@ async function finishDecision(runId: string, laneId: string, result: NonNullable
   await trace({ runId, laneId, actor: "engine", action: "decide", output: { state: result.state, decider: result.decider, reasons: result.reasons }, ok: true });
   const run = await loadRun(runId);
   if (!run) return;
+  // a kitchen that said no to an AI call gets none again from CrossCheck (never on a test call to your own phone)
+  if (run.mode === "live" && result.state === "declined" && lane.phase === "call" && refusedTheCall(lane.reports.at(-1)?.text ?? "")) await addDoNotCall(lane.restaurant, run.id);
   await stopOthers(run, lane);
   await saveToLedger(run, lane, result);
 }

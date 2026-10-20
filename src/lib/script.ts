@@ -6,8 +6,36 @@ import type { CheckInstance, Diner, Restaurant, Run, Station } from "./types";
 // the name on the booking: what Fo says it calls for and books under. Older runs use the first guest
 export const callerName = (run: Pick<Run, "bookingName" | "diners">) => run.bookingName?.trim() || run.diners[0]?.label.trim() || "a guest";
 
-export const opener = (name: string) =>
-  `Hi, this is an AI assistant calling for ${name}, who would like to eat at your restaurant. May I ask the chef or manager a few quick allergy questions? Is it OK if I take notes?`;
+// how serious the table's needs are, said once on the call: "a serious food allergy", "2 guests ... allergies"
+export function needLine(diners: Diner[], partySize: number, name: string): string {
+  const allergic = diners.filter((d) => d.restrictions.some((r) => r.kind === "allergy" || r.kind === "custom"));
+  const serious = diners.some((d) => d.restrictions.some((r) => (r.kind === "allergy" || r.kind === "custom") && r.severity !== "intolerance"));
+  const what = serious ? "serious food allerg" : "food allerg";
+  if (!allergic.length) return partySize === 1 ? `${name} keeps a strict diet.` : "Someone at the table keeps a strict diet.";
+  if (partySize === 1) return `${name} has a ${what}y.`;
+  return allergic.length === 1 ? `Someone at the table has a ${what}y.` : `${allergic.length} guests at the table have ${what}ies.`;
+}
+
+// "tonight at 7 PM" reads as is; a date reads "on Sat, Oct 24 at 7 PM"
+const whenPhrase = (when: string) => (/^(today|tonight|tomorrow)\b/i.test(when) ? when : `on ${when}`);
+
+// Who the call is for and why first, then that Fo is an AI, then a short ask. Restaurants hang up on calls that open
+// like a robocall; this still says it is an AI before a single question is asked
+export const opener = (run: Pick<Run, "bookingName" | "diners" | "partySize" | "when">) => {
+  const name = callerName(run);
+  return `Hi, I'm calling for ${name}, who would like a table for ${run.partySize} with you ${whenPhrase(run.when)}. ${needLine(run.diners, run.partySize, name)} I'm an AI assistant helping with the allergy questions. Could the chef or manager spare two minutes? Is it OK if I take notes?`;
+};
+
+// what to ask when you call a kitchen yourself, in the same words Fo would use
+export function humanQuestions(diners: Diner[], checks: CheckInstance[]): string[] {
+  const out = ["Which two or three dishes could the kitchen make for each guest?"];
+  for (const station of ["hidden", "fryer", "surfaces"] as Station[]) {
+    const group = checks.filter((c) => c.templateId === station);
+    if (group.length) out.push(group.length > 1 ? groupedAsk(station, group, diners) : group[0].spoken);
+  }
+  out.push("Could you read back what you will make for each guest, so I get it right?");
+  return out;
+}
 
 // Fo set its own redials, callbacks and even a human caller on Monday's live calls. The user decides every call.
 export const ONE_CALL = [
@@ -105,12 +133,13 @@ export function buildScript(diners: Diner[], checks: CheckInstance[]): CallScrip
   const missing = checks.map((c) => c.code).filter((c) => !asked.has(c));
 
   const replyFormat = [
-    "CALL OUTCOME: answered / declined / busy, call back at <time> / voicemail / automated system only",
+    "CALL OUTCOME: answered / declined / cannot accommodate / busy, call back at <time> / voicemail / automated system only",
     "RESPONDENTS: who you spoke to (chef, manager, cook, host, server or automated system)",
     `DISHES: ${diners.map((d) => `${d.label}: <dishes>`).join(" | ")}`,
     ...checks.map((c) => `${c.code} (${c.label.toLowerCase()}): "<their exact words>" (<who said it>)`),
     "READBACK: what you read back and their exact reply",
     "MORE CALLS OK: yes / no / not asked, then their exact words. Write no only if they said they do not want calls like this again",
+    "PERSON MAY CALL: only if they said no to an AI call: yes, then the time they gave, or no. Otherwise not asked",
     "OTHER: anything else they said, word for word where you can",
     "DURATION: <minutes>",
   ].join("\n");
@@ -135,9 +164,10 @@ export function callMessage(run: Run, r: Restaurant, checks: CheckInstance[], te
   return [
     `Please call ${theRestaurant(r)} at ${phoneFor(run, r, testPhone)} for me about a ${mealFor(run.when)} ${run.when} for ${run.partySize} people. ${NUMBER_OK}${test}`,
     "How to run the call:",
-    `- Open with: "${opener(callerName(run))}" If they say no to either, thank them and end the call.`,
+    `- Open with: "${opener(run)}" If they say no, never push.`,
+    `- If the no is about talking with an AI, ask once: "Would it be easier if ${callerName(run)} called you directly? When is a good time?" Then thank them, end the call and send me the report right away.`,
     "- If it is a bad time, ask when would be better, thank them and end.",
-    "- If they say they cannot accommodate, thank them and end. Never push.",
+    "- If they say they cannot accommodate, or say no for any other reason, thank them and end the call.",
     "- Keep it under 5 minutes. Share only what is written here. Do not book anything on this call.",
     ...ONE_CALL,
     "",
@@ -178,7 +208,7 @@ export function callbackMessage(
     ...lines,
     "Then read back what you heard and ask them to confirm.",
     `${REPORT_FIRST} Use their exact words and say who said each answer:`,
-    "CALL OUTCOME: answered / declined / busy, call back at <time> / voicemail / automated system only",
+    "CALL OUTCOME: answered / declined / cannot accommodate / busy, call back at <time> / voicemail / automated system only",
     "RESPONDENTS: <who>",
     `DISHES: ${run.diners.map((d) => `${d.label}: <dishes if mentioned>`).join(" | ")}`,
     ...open.map(({ check }) => `${check.code} (${check.label.toLowerCase()}): "<their exact words>" (<who said it>)`),
@@ -258,7 +288,7 @@ export function reconfirmMessage(
     "5. Read back what you heard for each guest dish by dish and ask them to confirm or correct it.",
     "",
     `${REPORT_FIRST} Use their exact words, including words like "I think", "usually" or "should be". Say who said each answer. Write "not asked" or "no answer" when that is what happened.`,
-    "CALL OUTCOME: answered / declined / busy, call back at <time> / voicemail / automated system only",
+    "CALL OUTCOME: answered / declined / cannot accommodate / busy, call back at <time> / voicemail / automated system only",
     "RESPONDENTS: who you spoke to (chef, manager, cook, host, server or automated system)",
     'NOTE ON BOOKING: "<their exact words>" (<who said it>)',
     'COOK FOR OUR BOOKING: "<their exact words>"',

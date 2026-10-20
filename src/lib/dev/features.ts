@@ -906,7 +906,7 @@ export function tonightTests() {
     T("preview: the real result replaces it and a late preview never covers it", [pv.preview, pv.result?.state, pv.status, late], [null, "needs_chef", "done", false]),
 
     T("caller name: no Anand left in what Fo says or sends for another booking name", [said.filter((t) => /anand/i.test(t)).length, said.every((t) => t.includes("Maya"))], [0, true]),
-    T("caller name: the booking name leads even when guest 1 has another label", [opener(callerName(sam)).includes("calling for Sam"), callMessage(sam, r, mchecks, "").includes("calling for Sam")], [true, true]),
+    T("caller name: the booking name leads even when guest 1 has another label", [opener(sam).includes("calling for Sam"), callMessage(sam, r, mchecks, "").includes("calling for Sam")], [true, true]),
     T("caller name: older runs fall back to the first guest", callerName({ diners: HERO }), "Anand"),
     T("caller name: invalid names are refused with a clear message", [nameRun("R2D2"), nameRun(""), nameRun("   "), nameRun("x".repeat(41)), nameRun("<b>Maya</b>"), nameRun(undefined, "Guest 1")], [
       ["refused", BOOKING_NAME_BAD],
@@ -1893,5 +1893,57 @@ export async function scoreTests() {
       [null, [["list_fo_conversations", 1, ["listed this run's Fo conversations"]]]],
     ]),
     T("score: the real runs record shows bookings, kitchens not called and stops, and leaves test runs out", runs.map((x) => [x.id, x.stopped, x.kitchens.map((k) => k.outcome)]), [["a", false, ["Booked", "Not called"]], ["b", true, ["Stopped"]]]),
+  ];
+}
+
+// Tuesday: restaurants hung up on an AI opener and every no took a full report wait. These hold the fixes
+export async function openerTests() {
+  const { quickOutcome, refusedTheCall } = await import("../rules");
+  const { personMayCall } = await import("../engine");
+  const { needLine, humanQuestions } = await import("../script");
+  const checks = buildChecks(HERO, "thai");
+  const r = fakeLane.restaurant as Restaurant;
+  const run = fakeRun({ when: "tonight at 7 PM", partySize: 2, bookingName: "Anand" });
+  const open = opener(run);
+  const message = callMessage(run, r, checks, "<FO_TEST_PHONE>");
+  const q = (text: string) => quickOutcome(parseReport(text), text, AT);
+  const shape = (x: ReturnType<typeof q>) => (x ? [x.state, x.headline, x.decider] : null);
+  return [
+    T("opener: who it is for and the stakes come first, then that it is an AI, before any question", [open.startsWith("Hi, I'm calling for Anand, who would like a table for 2 with you tonight at 7 PM."), open.includes("2 guests at the table have serious food allergies."), open.indexOf("I'm an AI assistant") < open.indexOf("?"), open.includes("Could the chef or manager spare two minutes?")], [true, true, true, true]),
+    T("opener: a date reads with on, a party of one and a diet only table read right", [opener(fakeRun({ when: "Sat, Oct 24 at 12 PM" })).includes("with you on Sat, Oct 24 at 12 PM."), needLine(HERO.slice(0, 1), 1, "Anand"), needLine([{ id: "g", label: "Ana", restrictions: [{ kind: "diet", diet: "no_beef", strictness: "ingredient" }] }] as Diner[], 2, "Ana")], [true, "Anand has a serious food allergy.", "Someone at the table keeps a strict diet."]),
+    T("call: a no to the AI gets one polite ask if a person may call, then the report right away", [message.includes('Would it be easier if Anand called you directly? When is a good time?'), message.includes("PERSON MAY CALL:"), message.includes("If they say no, never push.")], [true, true, true]),
+    T("fast no: a call that clearly ended is decided at once and never matches", [
+      shape(q("CALL OUTCOME: declined, they do not take AI calls\nPERSON MAY CALL: yes, after 3 PM")),
+      shape(q("CALL OUTCOME: declined")),
+      shape(q("CALL OUTCOME: voicemail")),
+      shape(q("CALL OUTCOME: busy, call back at 4 PM")),
+      shape(q("CALL OUTCOME: automated system only")),
+      shape(q("They said they don't take AI calls and hung up.")),
+      shape(q("Nobody picked up, it went to voicemail.")),
+    ], [["declined", "Said no to an AI call", "rule"], ["declined", "Said no to the call", "rule"], ["no_answer", "No answer yet", "rule"], ["no_answer", "No answer yet", "rule"], ["no_answer", "No answer yet", "rule"], ["declined", "Said no to an AI call", "rule"], ["no_answer", "No answer yet", "rule"]]),
+    T("fast no: an answered call, any allergy answer or allergy talk still goes to Claude and Jev", [
+      q("CALL OUTCOME: answered\nC1 (ingredients: shellfish): \"none\" (chef)"),
+      q("CALL OUTCOME: answered"),
+      q("They hung up after saying the fryer is shared."),
+      q("The test call went cleanly."),
+    ], [null, null, null, null]),
+    T("fast no: cannot accommodate is a Did not match about the food, never a no to the call or a do not call", [
+      shape(q("CALL OUTCOME: declined, they can't accommodate a severe shellfish allergy")),
+      shape(q("CALL OUTCOME: cannot accommodate")),
+      refusedTheCall("CALL OUTCOME: declined, they can't accommodate shellfish"),
+      refusedTheCall("CALL OUTCOME: declined, they don't take AI calls"),
+      refusedTheCall("CALL OUTCOME: declined"),
+    ], [["not_matched", "Said they cannot accommodate", "rule"], ["not_matched", "Said they cannot accommodate", "rule"], false, true, true]),
+    T("fast no: a voicemail or busy line that says they can't make it or do it stays No answer", [
+      shape(q("CALL OUTCOME: voicemail (\"sorry, we can't make it to the phone\")")),
+      shape(q("CALL OUTCOME: busy, they can't do it right now, call back at 5")),
+      shape(q("CALL OUTCOME: busy, we cannot accommodate calls at lunch, call back at 3")),
+    ], [["no_answer", "No answer yet", "rule"], ["no_answer", "No answer yet", "rule"], ["no_answer", "No answer yet", "rule"]]),
+    T("fast no: food talk in OTHER goes to the readers, and Fo saying it is an AI never labels the no", [
+      q("CALL OUTCOME: busy\nOTHER: the manager said the fryer is shared"),
+      shape(q("CALL OUTCOME: declined\nOTHER: I said I'm an AI assistant calling for Anand")),
+    ], [null, ["declined", "Said no to the call", "rule"]]),
+    T("handoff: a yes gives the time they named, a no or not asked gives nothing", ["yes, after 3 PM", "Yes after 2:30", "\"Yes\"", "no", "not asked", "", null].map(personMayCall), ["after 3 PM", "after 2:30", "any time", null, null, null, null]),
+    T("handoff: calling yourself uses the same questions Fo would ask", [humanQuestions(HERO, checks).length, humanQuestions(HERO, checks)[1].startsWith("Is there any shellfish or beef in Anand's dishes")], [5, true]),
   ];
 }
