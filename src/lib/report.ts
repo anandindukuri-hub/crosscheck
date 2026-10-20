@@ -72,6 +72,7 @@ export function parseReport(text: string): ParsedReport {
     respondentsRaw: field(text, "RESPONDENTS?"),
     answers,
     readback: field(text, "READBACK"),
+    optOut: field(text, "MORE CALLS OK"),
     dishes: field(text, "DISHES"),
     noteOnBooking: splitAnswer(field(text, "NOTE ON BOOKING")).words,
     noteOnBookingLine: field(text, "NOTE ON BOOKING") || null,
@@ -89,7 +90,38 @@ const QUESTION =
   /\b(should i|shall i|do you want|would you like|ok to|okay to|can you approve|need your (ok|approval|permission|confirmation|answer)|please confirm|can you confirm|confirm (that )?you want|is that (ok|okay|alright)|want me to|go ahead\?)\b/i;
 export const FINISHED = /\b(booked|reserved|emailed|sent (the|you|it)|all set|done[.!]|confirmation (number|code)|reservation (is|was) confirmed)\b/i;
 export const UNDERWAY =
-  /\b(calling\b[^.?!\n]{0,60}\bnow|i['’]?m calling|calling (them|the)|dialing|placing the call|i['’]?ll call|i will call|on it|will report back|i['’]?ll (let you know|get back|report|update)|i will (let you know|get back|report|update)|will update you|booking (it |that |the table |a table )?now|(i['’]?m|i am|still) working on|call is (in progress|underway)|currently on the (call|phone))\b/i;
+  /\b(calling\b[^.?!\n]{0,60}\bnow|i['’]?m calling|calling (them|the)|dialing|placing the call|i['’]?ll call|i will call|on it|will report back|i['’]?ll (let you know|get back|report|update)|i will (let you know|get back|report|update)|will update you|booking (it |that |the table |a table )?now|(i['’]?m|i am|still) working on|call is (in progress|underway)|call['’]?s (underway|in progress|going out)|going out now|on the line now|currently on the (call|phone)|i['’]?ll (post|deliver|bring|send) (you |the |their )?(full )?(report|answers))\b/i;
+// Fo saying it will call a kitchen again on its own (Monday's live calls: a redial, set callbacks, a human caller).
+// Only Fo's own voice: a kitchen's "call back at 2" inside CALL OUTCOME is what they asked for, not a plan
+export const SELF_CALLBACK =
+  /\b(set (up )?a (callback|redial|retry|call)|scheduled (the|a) (call|callback|retry)|(give it|try) (another ring|again)|another ring|redial(ing)?|human caller|i['’]?ll (call|ring|try) (them |it )?(again|back|later)|call (them )?again (at|later|around|shortly))\b/i;
+// "I won't redial", "I didn't set a callback" or "without redialing" is Fo following the rule, not a plan to call
+const NO_PLAN = /\b(won['’]?t|will not|not|no|never|without|cancel(l?ed)?|stopped|didn['’]?t|haven['’]?t|no longer)\W+(\w+\W+)?$/i;
+const SELF_CALLBACK_ALL = new RegExp(SELF_CALLBACK.source, "gi");
+// Fo's own voice: a plan is Fo's ("I've set", "I'll give it") or a human caller it arranged
+const FIRST_PERSON = /\b(i|i['’](ve|ll|m|d))\b|human caller/i;
+// "I cancelled the callback and the redial": a cancel or stop anywhere before the words. A human caller only counts
+// as cancelled right before it, so "stopped redialing and a human caller is calling" still counts
+const NEG_BEFORE = /\b(won['’]?t|will not|not|never|without|cancel(l?ed|ling)?|stopped|didn['’]?t|haven['’]?t|no longer)\b/i;
+// a field label (OTHER:) is dropped and quotes are the kitchen's words, never Fo's plan
+const FIELD_LINE = /^\s*(?:[-*•]\s*)?\**[A-Z][A-Z0-9 ()/:,'-]{2,}\**\s*:/;
+
+// The sentence where Fo says it will call a kitchen again on its own, or null. A negation just before the
+// words ("I've stopped redialing") cancels that match only, so "stopped redialing and a human caller is calling" still counts
+export function selfCallback(text: string): string | null {
+  for (const line of text.split(/\n+/)) {
+    const said = line.replace(FIELD_LINE, " ").replace(/["“][^"”]*["”]/g, " ");
+    for (const s of said.split(/(?<=[.!?])\s+/)) {
+      if (!FIRST_PERSON.test(s)) continue;
+      for (const m of s.matchAll(SELF_CALLBACK_ALL)) {
+        const before = s.slice(0, m.index);
+        const negated = /human caller/i.test(m[0]) ? NO_PLAN.test(before.slice(-30)) : NEG_BEFORE.test(before);
+        if (!negated) return s.trim().slice(0, 300);
+      }
+    }
+  }
+  return null;
+}
 export const CALL_ENDED =
   /\b(voicemail|no answer|nobody (picked up|answered)|no one (picked up|answered)|didn['’]?t (pick up|answer)|failed to connect|couldn['’]?t (reach|connect|get through)|line was busy|hung up|declined|not interested|automated (system|menu)|phone menu)\b/i;
 // a call still going on right now, so an ending word in it is not the end ("calling now, if it goes to voicemail...")

@@ -2,7 +2,8 @@ import { Download } from "lucide-react";
 import type { Metadata } from "next";
 import { DevStatus, DevToggle } from "@/components/setup/DevSetup";
 import { sentence } from "@/components/kit/typo";
-import { listRuns } from "@/lib/store";
+import { listRuns, loadLanes } from "@/lib/store";
+import { realRuns } from "@/lib/usage";
 import { readStats } from "@/lib/trace";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ const MODE = { test: "Test calls", live: "Real calls", replay: "Sample" } as con
 export default async function DeveloperSetup() {
   const [runs, stats] = await Promise.all([listRuns(), readStats()]);
   const recent = runs.slice(0, 12);
+  const real = realRuns(await Promise.all(runs.filter((r) => r.mode === "live" && r.approvedAt).map(async (run) => ({ run, lanes: await loadLanes(run) }))));
   return (
     <div className="wrap pt-10 pb-20 md:pt-14">
       <div className="mx-auto max-w-[720px]">
@@ -55,6 +57,22 @@ export default async function DeveloperSetup() {
             See the latest run
           </a>
         </p>
+
+        <h2 className="type-footnote mt-10 mb-2 px-6 font-medium text-ink-2 md:px-8">Real runs</h2>
+        <p className="type-callout mb-3 px-6 text-ink-2 md:px-8">Every real run, with what each kitchen gave back. The honest record behind the run count.</p>
+        <ul className="card divide-y divide-hairline overflow-hidden">
+          {real.length === 0 && <li className="type-callout px-6 py-4 text-ink-2">No real runs yet.</li>}
+          {real.map((r) => (
+            <li key={r.id} className="px-6 py-3 md:px-8">
+              <p className="text-[15px] font-medium">
+                {new Date(r.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                {r.kitchens.some((k) => k.booked) ? " · Booked" : ""}
+                {r.stopped ? " · Stopped by you" : ""}
+              </p>
+              <p className="type-footnote mt-0.5 text-ink-2">{r.kitchens.map((k) => `${k.name}: ${k.outcome}`).join(" · ")}</p>
+            </li>
+          ))}
+        </ul>
 
         <h2 className="type-footnote mt-10 mb-2 px-6 font-medium text-ink-2 md:px-8">Run traces</h2>
         <p className="type-callout mb-3 px-6 text-ink-2 md:px-8">Every Fo, Jev and Claude call in a run, with phone numbers, emails, sign in values, staff names and the names of places that were not booked removed.</p>

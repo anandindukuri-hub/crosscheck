@@ -72,6 +72,23 @@ export async function laneConversation(run: Run, lane: Lane): Promise<FoTurn[]> 
   return turnsOf(r.raw).map((t) => ({ ...t, text: mask(t.text) }));
 }
 
+// Check Fo's conversations: every Fo conversation started since this run began, sorted into this run's kitchens and the
+// rest. Only counts leave this function: the rest are Anand's own chats with Fo and are never read or named
+export async function callCheck(run: Run, lanes: Lane[]) {
+  notInReplay(run);
+  const ours = new Set(lanes.map((l) => l.conversationId).filter(Boolean) as string[]);
+  // only conversations with a start time after the run began, so an undated one is never counted as new
+  const since = (raw: unknown) => conversationsOf(raw).filter((c) => !!c.startedAt && c.startedAt >= run.createdAt);
+  const count = (raw: unknown) => {
+    const list = since(raw);
+    const mine = list.filter((c) => ours.has(c.conversationId)).length;
+    return { since: list.length, ours: mine, other: list.length - mine };
+  };
+  const r = await callFo("list_fo_conversations", {}, { runId: run.id, scrub: (raw, isError) => (isError ? raw : count(raw)) });
+  failed(r, "list conversations");
+  return { ...count(r.raw), kitchens: ours.size };
+}
+
 // Only this run's own lane conversations. Everything else in the list is Anand's private chats with Fo
 // and never leaves this function or reaches the trace.
 export async function runConversations(run: Run, lanes: Lane[]) {

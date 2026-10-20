@@ -23,6 +23,7 @@ import {
   callAnywayStep,
   canStartReconfirm,
   foBegan,
+  foMayHaveIt,
   followUpLost,
   foHasItStep,
   landResult,
@@ -32,6 +33,7 @@ import {
   NO_CONVERSATION,
   NO_FOLLOW,
   noConversationStep,
+  notStarted,
   nothingNew,
   reconfirmDoubts,
   refusedStep,
@@ -48,17 +50,19 @@ import {
   waitCeiling,
 } from "./lanes";
 import { findMemory, readLedgerFile, recordResult, resultFromMemory } from "./ledger";
+import { addDoNotCall, blockedByOptOut, listDoNotCall, optedOut } from "./donotcall";
 import { allergyNote } from "./note";
 import { compareReconfirm, missingTicks, reconfirmFailure } from "./reconfirm";
-import { CALL_ENDED, parseReport } from "./report";
-import { busy, enqueue as enqueueOn, hold, newRegistry, type Registry } from "./queue";
+import { CALL_ENDED, parseReport, selfCallback } from "./report";
+import { busy, hold, newRegistry, type Registry } from "./queue";
 import { findRestaurant, normalizePhone } from "./restaurants";
 import { callCuisine, callOrder, riskCount } from "./risk";
 import { decideLane, previewLane, type Fidelity } from "./rules";
 import { bookingMessage, callbackMessage, callMessage, reconfirmMessage, replayAsk } from "./script";
 import { currentFidelity, saveFidelity } from "./settings";
 import { listRuns, loadLane, loadLanes, loadRun, saveLane, saveRun } from "./store";
-import { bumpStats, phonePattern, trace } from "./trace";
+import { bumpStats, phonePattern, readTrace, trace } from "./trace";
+import { foUsage } from "./usage";
 import type { CheckInstance, ChoiceDecision, ClaudeJudgement, Decisions, Diner, Lane, LaneResult, LaneStatus, NewRunInput, ParsedReport, Reconfirm, Restaurant, Run } from "./types";
 
 // Engine state lives on globalThis so dev server reloads do not start a second poller
@@ -66,6 +70,7 @@ const g = globalThis as unknown as { __ccEngine?: Registry };
 const reg: Registry = (g.__ccEngine ??= newRegistry());
 reg.locks ??= new Map();
 reg.pending ??= new Set();
+reg.stopping ??= new Set();
 
 // read, change and save one file at a time, so two updates to a lane never overwrite each other
 function locked<T>(key: string, fn: () => Promise<T>): Promise<T> {
@@ -106,9 +111,6 @@ function mutate(runId: string, laneId: string, fn: (l: Lane) => void) {
   });
 }
 
-// The slot is held for a whole Fo turn, including "calling now, report later" and released when Fo needs Anand
-const enqueue = (job: () => Promise<void>) => enqueueOn(reg, job);
-
 // Taken before an action's first await, so two quick taps can never both start Fo work on one lane
 function claim(laneId: string) {
   if (busy(reg, laneId)) throw new UserError("Fo is still busy with this restaurant");
@@ -125,6 +127,7 @@ function enqueueLane(runId: string, laneId: string, message: string, opts: { con
     () =>
       mutate(runId, laneId, (l) => {
         l.pending = { message, conversationId: opts.conversationId ?? null, newConversation: !!opts.newConversation };
+        l.stoppedAt = null;
       }),
     () => work(runId, laneId, message, opts),
     claimed,
@@ -143,20 +146,29 @@ function enqueueJob(runId: string, laneId: string, wait: { status: LaneStatus; p
         l.status = wait.status;
         l.progress = wait.progress;
         l.error = null;
+        l.stoppedAt = null;
       }),
     async () => {
       try {
+        // Stop all calls came while this waited its turn: nothing runs
+        const l = await loadLane(runId, laneId);
+        if (l && stoppedHere(l)) return;
         await job(await turnCtx(runId, laneId));
+        if (reg.stopping.has(laneId)) await finishStop(runId, laneId, null);
       } catch (e) {
         await fail(runId, laneId, e);
       } finally {
         reg.active.delete(laneId);
+        reg.stopping.delete(laneId);
         await maybeCount(runId);
       }
     },
     claimed,
   );
 }
+
+// Stop all calls ended this lane and nothing you tapped since has queued it again
+const stoppedHere = (l: Pick<Lane, "stoppedAt" | "status" | "skipped">) => !!l.skipped || (!!l.stoppedAt && l.status === "done");
 
 // DEV REPLAY work starts right away but holds the lane like a real job, so buttons wait for it too
 function replayJob(runId: string, laneId: string, fn: () => Promise<unknown>) {
@@ -206,6 +218,12 @@ async function turnCtx(runId: string, laneId: string) {
   return {
     runId,
     laneId,
+    // Stop all calls ends a turn at its next poll instead of waiting out the report
+    signal: {
+      get stopped() {
+        return reg.stopping.has(laneId);
+      },
+    },
     ceilingMs: waitCeiling(lane?.phase ?? "call", run?.mode ?? "test"),
     onProgress: async (line: string) => {
       if (line === last) return;
@@ -354,6 +372,8 @@ export function maskLane<L extends Lane>(l: L, mask: (text: string) => string): 
 export async function runView(id: string) {
   const run = await loadRun(id);
   if (!run) return null;
+  // a run that finished while the server was down is counted the first time it is opened, once
+  if (run.approvedAt && !run.countedAt) void maybeCount(id);
   const lanes = await loadLanes(run);
   const mask = phoneMasker();
   return {
@@ -362,6 +382,8 @@ export async function runView(id: string) {
     scripts: Object.fromEntries(lanes.map((l) => [l.id, callMessage(run, l.restaurant, run.checks[l.id], TEST_PHONE)])),
     calibration: run.purpose === "calibration" && run.laneIds[0] ? calibrationLines(run.checks[run.laneIds[0]]) : null,
     calibrationNoCall: run.purpose === "calibration" && !run.calibratedAt && noCall(lanes[0]),
+    // how this run used Fo, from its own trace
+    usage: run.mode === "replay" ? [] : foUsage(await readTrace(id), lanes),
   };
 }
 
@@ -380,9 +402,59 @@ function assertCanCall(run: Run, lanes: Lane[], agreedIds: string[]) {
   if (missing) throw new UserError(missing);
 }
 
+// the real run still going, if any, for the Setup page's ready check
+export async function openLiveRun(): Promise<{ id: string; when: string } | null> {
+  for (const run of await listRuns()) {
+    if (run.mode !== "live" || !run.approvedAt) continue;
+    if (liveBlocked([], [{ lanes: await loadLanes(run) }])) return { id: run.id, when: run.when };
+  }
+  return null;
+}
+
+export const LIVE_RUN_OPEN = "Another real run is still going. Finish it or tap Stop all calls on it first.";
+export const OPTED_OUT = (name: string) => `${name} asked not to get calls like this. CrossCheck will not call them.`;
+export const OPTED_OUT_BOOK = "They asked not to get calls like this. Book online or call them yourself.";
+
+// a kitchen that said no to more calls gets none: no chef callback, booking call or reconfirm either
+async function assertNotOptedOut(run: Run, lane: Lane, message = OPTED_OUT(lane.restaurant.name)) {
+  if (run.mode !== "live") return;
+  if (blockedByOptOut([lane.restaurant], await listDoNotCall())) throw new UserError(message);
+}
+export const SAY_IF_BOOKED = (name: string) => `Say whether ${name} is booked first. Open it and tap Fo booked it or Not booked.`;
+export const CALLED_RECENTLY = (name: string) => `${name} was called in the last 12 hours. CrossCheck waits 12 hours before calling a kitchen again.`;
+const RECENT_MS = 12 * 3600_000;
+
+// Real calls: one run at a time, and no new run calls a kitchen Fo began calling in the last 12 hours (Monday had two runs
+// both calling Bartaco). Fo only asking "Should I call?" does not count
+export function liveBlocked(calling: Pick<Lane, "restaurant">[], others: { lanes: Pick<Lane, "restaurant" | "status" | "skipped" | "goAhead" | "reports" | "startedAt" | "updatedAt" | "phase" | "booking">[] }[], at = Date.now()): string | null {
+  const open = (l: (typeof others)[number]["lanes"][number]) => !l.skipped && !["done", "error", "fo_still_working"].includes(l.status);
+  const card = others.flatMap((o) => o.lanes).find((l) => bookingConfirmShown(l));
+  if (card) return SAY_IF_BOOKED(card.restaurant.name);
+  if (others.some((o) => o.lanes.some(open))) return LIVE_RUN_OPEN;
+  const phone = (r: Pick<Restaurant, "phone">) => (r.phone ? (normalizePhone(r.phone) ?? r.phone) : "");
+  const recent = new Set(
+    others.flatMap((o) => o.lanes.filter((l) => (l.goAhead || l.reports.length) && at - Date.parse(l.startedAt ?? l.updatedAt) < RECENT_MS).map((l) => phone(l.restaurant))),
+  );
+  recent.delete("");
+  const again = calling.find((l) => recent.has(phone(l.restaurant)));
+  return again ? CALLED_RECENTLY(again.restaurant.name) : null;
+}
+
+async function assertLiveFree(run: Run, calling: Lane[]) {
+  const others = [];
+  for (const o of await listRuns()) {
+    if (o.id === run.id || o.mode !== "live" || !o.approvedAt) continue;
+    others.push({ lanes: await loadLanes(o) });
+  }
+  const why = liveBlocked(calling, others);
+  if (why) throw new UserError(why);
+  const asked = blockedByOptOut(calling.map((l) => l.restaurant), await listDoNotCall());
+  if (asked) throw new UserError(OPTED_OUT(asked.name));
+}
+
 // under the run lock, so two approve taps (two tabs, a phone and a laptop, a retried request) never queue the calls twice
 export function approveRun(id: string, agreedIds: string[]) {
-  return locked(`run:${id}`, () => approveLocked(id, agreedIds));
+  return locked(`run:${id}`, () => locked("approve", () => approveLocked(id, agreedIds)));
 }
 
 async function approveLocked(id: string, agreedIds: string[]) {
@@ -394,6 +466,7 @@ async function approveLocked(id: string, agreedIds: string[]) {
   // a memory match means the others are not called either
   const plan = approvalPlan(run, lanes);
   assertCanCall(run, plan.call, agreedIds);
+  if (run.mode === "live" && plan.call.length) await assertLiveFree(run, plan.call);
   run.approvedAt = now();
   await saveRun(run);
   await trace({ runId: id, actor: "user", action: "approve_calls", input: { lanes: plan.call.map((l) => l.restaurant.name), fromMemory: lanes.filter((l) => l.fromMemory).length, notCalled: plan.skip.map((l) => l.restaurant.name) }, ok: true });
@@ -447,22 +520,29 @@ async function work(runId: string, laneId: string, message: string, opts: { conv
           addEvent(l, "warning", "The send to Fo lost its reply. Fo may already have this message.");
         }),
     };
-    // another kitchen matched while this one waited its turn: nothing is sent
+    // another kitchen matched, or Stop all calls came, while this one waited its turn: nothing is sent
     let skipped = false;
     await mutate(runId, laneId, (l) => {
-      if (l.skipped) {
+      if (stoppedHere(l) || reg.stopping.has(laneId)) {
         skipped = true;
         l.pending = null;
         return;
       }
+      // you queued this lane again after a stop, so it is live again
+      l.stoppedAt = null;
       l.status = "calling";
       l.error = null;
       l.waitingOn = null;
       l.progress = l.phase === "booking" ? "Fo is booking" : l.phase === "reconfirm" ? "Fo is calling to reconfirm" : "Fo is working on it";
       l.startedAt ??= now();
     });
-    if (skipped) return;
+    if (skipped) {
+      if (reg.stopping.has(laneId)) await finishStop(runId, laneId, null);
+      return;
+    }
     const out = await runFoTurn(message, opts, ctx);
+    // a finished report that lands right as Stop comes is still weighed, then the lane stops
+    if (reg.stopping.has(laneId) && out.kind !== "report") return await finishStop(runId, laneId, out.conversationId);
     if (out.kind === "no_conversation") {
       await mutate(runId, laneId, (l) => {
         noConversationStep(l, message, out.text);
@@ -471,11 +551,166 @@ async function work(runId: string, laneId: string, message: string, opts: { conv
       return;
     }
     await settle(runId, laneId, out, ctx);
+    if (reg.stopping.has(laneId)) await finishStop(runId, laneId, out.conversationId);
   } catch (e) {
     await fail(runId, laneId, e);
   } finally {
     reg.active.delete(laneId);
+    reg.stopping.delete(laneId);
     await maybeCount(runId);
+  }
+}
+
+// ---- stops: a stop is a message, never a call, so it never waits behind queued calls ----
+
+export const stopText = (name: string) =>
+  `Please stop. Do not call ${name} again and cancel any callback, redial or retry you set for them. Reply in one line with what you cancelled.`;
+
+// one stop per lane at a time, so a second tap or tab never sends it twice
+const stopsInFlight = new Set<string>();
+
+// save: keep the stop on the lane until Fo confirms, so a restart sends it once more. A resend after a restart
+// passes false, so a stop Fo keeps refusing is never sent on every restart
+async function sendStop(runId: string, laneId: string, conversationId: string, name: string, save = true): Promise<boolean> {
+  if (stopsInFlight.has(laneId)) return false;
+  stopsInFlight.add(laneId);
+  const text = stopText(name);
+  try {
+    if (save) await mutate(runId, laneId, (l) => void (l.stopPending = { conversationId, text, at: now() }));
+    const r = await callFo("ask_fo", { message: text, conversationId }, { runId, laneId });
+    if (r.isError) throw new Error(r.response || "Fo refused the message");
+    await mutate(runId, laneId, (l) => {
+      l.stopPending = null;
+      if (l.foCallback && !l.foCallback.cancelled) l.foCallback.cancelled = now();
+      addEvent(l, "progress", "Fo was told to stop and cancel any callback for this kitchen.");
+    });
+    return true;
+  } catch (e) {
+    await mutate(runId, laneId, (l) => addEvent(l, "warning", `Could not tell Fo to stop: ${e instanceof Error ? e.message : e}. Stop it in your Fo app.`)).catch(() => undefined);
+    return false;
+  } finally {
+    stopsInFlight.delete(laneId);
+  }
+}
+
+// a turn Stop all calls cut short: the lane ends and Fo is told to stop
+async function finishStop(runId: string, laneId: string, conversationId: string | null) {
+  reg.stopping.delete(laneId);
+  const lane = await mutate(runId, laneId, (l) => {
+    if (conversationId) l.conversationId ??= conversationId;
+    l.stoppedAt ??= now();
+    if (l.status !== "done") stopLane(l, now());
+  });
+  if (lane.conversationId) await sendStop(runId, laneId, lane.conversationId, lane.restaurant.name);
+}
+
+// a follow up (an answer, the chef callback, a reconfirm) still waiting in the queue: Fo never got it
+const unsentFollowUp = (l: Lane) => l.status === "queued" && !!l.pending && !l.pending.uncertain && l.phase !== "booking";
+
+// Stop all calls: kitchens Fo never got are not called, the one Fo is on ends at its next poll, and every
+// kitchen Fo has (or said it will call again) is told to stop. Nothing new is ever dialed by this
+export async function stopAll(runId: string) {
+  const run = await loadRun(runId);
+  if (!run) throw new UserError("Not found");
+  if (run.mode === "replay") throw new UserError("A sample makes no calls");
+  run.stoppedAt ??= now();
+  await saveRun(run);
+  await trace({ runId, actor: "user", action: "stop_all", ok: true });
+  const toTell: Lane[] = [];
+  for (const l of await loadLanes(run)) {
+    // already on the "Did Fo book it?" card: only your answer ends it, so no second stop goes to Fo
+    if (bookingConfirmShown(l) && !reg.active.has(l.id)) continue;
+    if (reg.active.has(l.id)) {
+      reg.stopping.add(l.id);
+      // saved too, so a restart before the turn ends still stops it and tells Fo
+      await mutate(runId, l.id, (x) => {
+        x.stoppedAt = now();
+        if (x.conversationId) x.stopPending = { conversationId: x.conversationId, text: stopText(x.restaurant.name), at: now() };
+      });
+      continue;
+    }
+    if (notStarted(l, false) || (l.status === "queued" && !l.conversationId && !foMayHaveIt(l))) {
+      await mutate(runId, l.id, (x) => {
+        x.status = "done";
+        x.pending = null;
+        x.foQuestion = null;
+        x.stoppedAt = now();
+        x.skipped = { reason: "You stopped all calls.", at: now() };
+        x.progress = "Not called. You stopped all calls.";
+        addEvent(x, "skipped", x.progress);
+      });
+      continue;
+    }
+    if (unsentFollowUp(l)) {
+      await mutate(runId, l.id, (x) => {
+        x.status = "done";
+        x.pending = null;
+        x.stoppedAt = now();
+        x.progress = "You stopped this before it reached Fo.";
+        // nothing went out, so the one chef callback is not used up and a reconfirm can be asked again
+        if (x.phase === "callback") x.callbacks = Math.max(0, x.callbacks - 1);
+        if (x.phase === "reconfirm" && x.reconfirm?.status === "requested") x.reconfirm = { ...x.reconfirm, status: "failed", reasons: [x.progress] };
+        addEvent(x, "you", x.progress);
+      });
+      if (!l.foCallback || l.foCallback.cancelled) continue;
+    }
+    const open = !["done", "error"].includes(l.status);
+    const callbackLeft = !!l.foCallback && !l.foCallback.cancelled;
+    if (!open && !callbackLeft) continue;
+    const lane = await mutate(runId, l.id, (x) => {
+      x.stoppedAt = now();
+      if (open) stopLane(x, now());
+      // saved now, so the stop survives a restart before it goes out
+      if (x.conversationId) x.stopPending = { conversationId: x.conversationId, text: stopText(x.restaurant.name), at: now() };
+    });
+    if (lane.conversationId) toTell.push(lane);
+  }
+  // in the background and in parallel: each is a short text to its own conversation, so the tap answers at once
+  void Promise.all(toTell.map((l) => sendStop(runId, l.id, l.conversationId!, l.restaurant.name))).then(() => maybeCount(runId));
+  await maybeCount(runId);
+}
+
+// One tap on the warning "Fo plans to call them again": Fo is told to cancel
+export async function cancelFoCallback(runId: string, laneId: string) {
+  const lane = await loadLane(runId, laneId);
+  if (!lane) throw new UserError("Not found");
+  if (!lane.foCallback || lane.foCallback.cancelled) throw new UserError("There is no callback from Fo to cancel");
+  if (!lane.conversationId) throw new UserError("CrossCheck cannot reach this Fo conversation. Cancel it in your Fo app.");
+  if (busy(reg, laneId) || stopsInFlight.has(laneId)) throw new UserError("Fo is still busy with this restaurant");
+  if (!(await sendStop(runId, laneId, lane.conversationId, lane.restaurant.name))) throw new UserError("Could not reach Fo. Cancel it in your Fo app.");
+}
+
+// After a restart nothing is running, so lanes left mid step say so and wait for a Resume tap (a lane Stop all
+// calls reached ends stopped). Nothing is sent on its own, except a saved stop, which goes out once
+export async function recoverAfterRestart() {
+  for (const run of await listRuns()) {
+    if (run.mode === "replay") continue;
+    for (const l of await loadLanes(run)) {
+      if (busy(reg, l.id)) continue;
+      try {
+        const stuck = ["calling", "waiting_report", "queued", "deciding"].includes(l.status);
+        const stop = l.stopPending;
+        if (stuck || stop) {
+          await mutate(run.id, l.id, (x) => {
+            x.stopPending = null;
+            if (!stuck) return;
+            if (x.stoppedAt) {
+              stopLane(x, now());
+              return;
+            }
+            x.status = "fo_still_working";
+            x.progress = x.pending && !x.pending.uncertain && !x.conversationId
+              ? "CrossCheck restarted before this call went out. Tap Resume to send it."
+              : "CrossCheck restarted. Tap Resume to check on Fo.";
+            addEvent(x, "warning", x.progress);
+          });
+        }
+        if (stop) void sendStop(run.id, l.id, stop.conversationId, l.restaurant.name, false);
+      } catch (e) {
+        console.error("CrossCheck could not recover a lane", l.id, e);
+      }
+    }
+    await maybeCount(run.id);
   }
 }
 
@@ -492,9 +727,16 @@ async function fail(runId: string, laneId: string, e: unknown) {
 }
 
 async function settle(runId: string, laneId: string, out: TurnOutcome, ctx: Parameters<typeof waitForReport>[1]): Promise<void> {
+  // Fo said it will call this kitchen again on its own: the lane warns and offers one tap to cancel
+  // Fo asking first ("I can set up a call, want me to?") is a question for you, not a plan
+  const plan = out.kind === "question" ? null : selfCallback(out.text);
   const lane = await mutate(runId, laneId, (l) => {
     if (out.conversationId) l.conversationId = out.conversationId;
     addEvent(l, `fo_${out.kind}`, out.text.slice(0, 2000));
+    if (plan && (!l.foCallback || l.foCallback.cancelled)) {
+      l.foCallback = { text: plan, at: now() };
+      addEvent(l, "warning", `Fo said it will call them again on its own: "${plan}"`);
+    }
     // kept as a flag too, since old events get trimmed
     if (foBegan(out.kind)) l.goAhead ??= now();
   });
@@ -528,6 +770,8 @@ async function settle(runId: string, laneId: string, out: TurnOutcome, ctx: Para
       if (await askForReport(runId, laneId, lane, out)) return settle(runId, laneId, await runFoTurn(REPORT_AGAIN, { conversationId: lane.conversationId }, ctx), ctx);
       return askUser(runId, laneId, out.text);
     case "underway":
+      // "The call is complete... I'll send the full report" is a summary, so the report is asked for, not waited on
+      if (await askForReport(runId, laneId, lane, out)) return settle(runId, laneId, await runFoTurn(REPORT_AGAIN, { conversationId: lane.conversationId }, ctx), ctx);
       await mutate(runId, laneId, (l) => {
         l.status = "waiting_report";
         l.waitingOn = out.text;
@@ -551,10 +795,10 @@ async function settle(runId: string, laneId: string, out: TurnOutcome, ctx: Para
 export const REPORT_AGAIN =
   "Please paste the full call report here in exactly the reply format from my first message, starting with CALL OUTCOME. Use their exact words and say who said each answer.";
 export const AFTER_CALL =
-  /\b(the (test )?call (went|is (now )?(complete|done|over|finished)|ended|wrapped( up)?|finished)|call is complete|checks? came back|after the call|on the call,? (the|they) (chef|manager|kitchen|cook|said|told))\b/i;
+  /\b(the (test )?call (went|is (now )?(complete|done|over|finished)|ended|wrapped( up)?|finished)|call is complete|checks? came back|after the call)\b/i;
 
 async function askForReport(runId: string, laneId: string, lane: Lane, out: TurnOutcome): Promise<boolean> {
-  if (lane.phase !== "call" || !lane.goAhead || !lane.conversationId || lane.reportAsked || !AFTER_CALL.test(out.text)) return false;
+  if (lane.phase !== "call" || !lane.goAhead || !lane.conversationId || lane.reportAsked || reg.stopping.has(laneId) || !AFTER_CALL.test(out.text)) return false;
   await mutate(runId, laneId, (l) => {
     l.reportAsked = now();
     l.progress = "Asking Fo for the full report";
@@ -597,6 +841,11 @@ async function decide(runId: string, laneId: string, text: string) {
   if (run.purpose === "calibration" && lane.phase === "call") await calibrate(run, laneId, text);
   const allChecks = run.checks[laneId];
   const parsed = parseReport(text);
+  // the kitchen asked not to get calls like this again: never on a test call, which rings your own phone
+  if (run.mode === "live" && optedOut(parsed.optOut)) {
+    await addDoNotCall(lane.restaurant, run.id);
+    await mutate(runId, laneId, (l) => addEvent(l, "warning", `${l.restaurant.name} asked not to get calls like this again. CrossCheck will not call them again, not even to book.`));
+  }
   if (lane.phase === "reconfirm") return decideReconfirm(run, lane, parsed, text);
   const prior = lane.phase === "callback" ? lane.result : null;
   const openKeys = new Set((prior?.checks ?? []).filter((v) => v.outcome !== "pass").map((v) => v.key));
@@ -606,8 +855,17 @@ async function decide(runId: string, laneId: string, text: string) {
   const onJev = (decisions: Decisions) =>
     mutate(runId, laneId, (l) => void showPreview(l, previewLane({ checks: allChecks, relevant, diners: run.diners, parsed, decisions, fidelity, prior })));
   const { judgement, decisions } = await weigh(run, lane, relevant, parsed, text, onJev);
-  const result = decideLane({ checks: allChecks, diners: run.diners, parsed, decisions, judgement, fidelity, prior });
+  const result = withOpening(decideLane({ checks: allChecks, diners: run.diners, parsed, decisions, judgement, fidelity, prior }), text);
   await finishDecision(runId, laneId, result, parsed.email);
+}
+
+// "No one answered" for a kitchen that is simply closed reads wrong. Fo's own words say when they open
+// only a real time or day: "until further notice" says nothing about when to try again
+const CLOSED = /\b(?:closed|not open)(?: today)? until ([^.,;\n()]{0,30}?(?:\d|noon|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)[^.,;\n()]{0,20})/i;
+export function withOpening(result: LaneResult, text: string): LaneResult {
+  const m = result.state === "no_answer" ? text.match(CLOSED) : null;
+  if (!m) return result;
+  return { ...result, reasons: result.reasons.map((r) => (r === "No one answered" ? `Closed until ${m[1].trim()}. Try them again after they open.` : r)) };
 }
 
 // Claude reads the report, Jev decides each question; Claude alone only when Jev is missing or fails.
@@ -801,9 +1059,12 @@ async function countRun(runId: string) {
   const lanes = await loadLanes(run);
   if (!runFinished(lanes, (id) => reg.active.has(id))) return;
   if (lanes.some((l) => l.status === "needs_you")) return;
+  // a run stopped before any kitchen gave a result never ran, so it is not counted at all
+  if (!lanes.some((l) => l.result || l.fromMemory)) return;
   run.countedAt = now();
   await saveRun(run);
-  await bumpStats(run.mode, lanes.every((l) => l.status === "done"));
+  // a run you stopped is counted but never as a success
+  await bumpStats(run.mode, !run.stoppedAt && lanes.every((l) => l.status === "done"));
 }
 
 // ---- actions from the run page ----
@@ -847,6 +1108,7 @@ export async function askChef(runId: string, laneId: string) {
   if (!run || !lane) throw new UserError("Not found");
   if (lane.result?.state !== "needs_chef") throw new UserError("Only lanes that need the chef get a callback");
   if (lane.callbacks >= 1) throw new UserError("One callback per restaurant. CrossCheck will not keep calling them.");
+  await assertNotOptedOut(run, lane);
   claim(laneId);
   try {
     const checks = run.checks[laneId];
@@ -876,6 +1138,7 @@ export async function book(runId: string, laneId: string, opts: { depositCap: nu
   if (!run || !lane?.result) throw new UserError("Not found");
   const blocked = bookBlocked(lane, !!run.approvedAt, opts.reviewed, await loadLanes(run)) ?? bookAgreedBlocked(run, lane);
   if (blocked) throw new UserError(blocked);
+  await assertNotOptedOut(run, lane, OPTED_OUT_BOOK);
   // a live booking phones the kitchen, so it needs what every call needs
   if (run.mode === "live") assertCanCall(run, [lane], [lane.id]);
   claim(laneId);
@@ -1141,8 +1404,20 @@ export async function declineFo(runId: string, laneId: string) {
     }
     await maybeCount(runId);
   };
-  if (holdIt) await hold(reg, laneId, async () => undefined, tell, true);
-  else enqueue(tell);
+  if (holdIt)
+    return void (await hold(reg, laneId, async () => undefined, async () => {
+      try {
+        await tell();
+      } finally {
+        reg.stopping.delete(laneId);
+        await mutate(runId, laneId, (l) => void (l.stopPending = null));
+      }
+    }, true));
+  // not a booking: a stop is a message, never a call, so it goes out now instead of behind queued calls
+  await mutate(runId, laneId, (l) => {
+    l.stopPending = { conversationId: convo, text: stopText(lane.restaurant.name), at: now() };
+  });
+  void sendStop(runId, laneId, convo, lane.restaurant.name).then(() => maybeCount(runId));
 }
 
 export async function setAgreed(runId: string, laneId: string, agreed: boolean) {
@@ -1190,6 +1465,7 @@ export async function callAnyway(runId: string, laneId: string) {
   const blocked = callAnywayBlocked(lane, !!run.approvedAt, busy(reg, laneId));
   if (blocked) throw new UserError(blocked);
   assertCanCall(run, [lane], lane.agreed ? [lane.id] : []);
+  if (run.mode === "live") await assertLiveFree(run, [lane]);
   claim(laneId);
   try {
     await trace({ runId, laneId, actor: "user", action: "call_anyway", input: { skipped: lane.skipped?.reason ?? null }, ok: true });
@@ -1216,6 +1492,7 @@ export async function requestReconfirm(runId: string, laneId: string) {
   const st = lane.result?.state;
   if (!canStartReconfirm(lane.reconfirm)) throw new UserError(reconfirmBlocked(lane.reconfirm?.status));
   if (lane.status !== "done" || !lane.result || !(st === "matched" || st === "needs_review")) throw new UserError("Only a matched or reviewed restaurant can be reconfirmed");
+  await assertNotOptedOut(run, lane);
   if (lane.booking?.status !== "done") throw new UserError("Reconfirm comes after the booking is done");
   assertCanCall(run, [lane], lane.agreed ? [lane.id] : []);
   const dishes = lane.result.dishes;

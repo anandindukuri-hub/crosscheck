@@ -9,6 +9,7 @@ import { buttonClass } from "../kit/button";
 import { api, Button, ErrorNote, errText, fmtDateTime, Skeleton } from "../ui";
 import { useStatus } from "../useStatus";
 import { SignalList } from "./SignalList";
+import { LiveReady } from "./LiveReady";
 import { Rows, StatusRow } from "./StepKeys";
 
 export type Settings = { fidelity: "verified" | "unverified"; source: "env" | "calibration" | null; calibration: FidelitySetting | null };
@@ -200,6 +201,7 @@ export function SetupFlow() {
           )}
         </div>
       </section>
+      {missing === 0 && <LiveReady />}
       {missing > 0 && (
         <p className="mt-4 text-center">
           <Link href="/setup/developer" className="type-footnote inline-flex min-h-11 items-center text-ink-2 hover:text-ink hover:underline">

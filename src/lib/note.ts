@@ -29,7 +29,7 @@ export function allergyNote(run: Run, lane: Lane, opts: { forFo?: boolean } = {}
     ...quotes,
     "",
     "Please flag our tickets for allergies, use clean pans and utensils and have the chef or manager check in with us when we arrive.",
-    "Thank you for taking the time to answer our questions.",
+    "If anything here is wrong, please tell us and we will fix it. Thank you for taking the time to answer our questions.",
     "",
     // the kitchen reads this line, so it never gives the diner's own advice
     `Sent for ${callerName(run)} by CrossCheck, an app that asks kitchens about allergies by phone. It passes on what your staff told us and is not a guarantee. We will also tell our server when we arrive.`,

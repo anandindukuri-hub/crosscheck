@@ -16,6 +16,9 @@ import { LiveActivity } from "@/components/run/LiveActivity";
 import { AlertsRow, NeedsYouAlerts } from "@/components/run/NeedsYouAlerts";
 import { bySeverity, guestNeeds, sortNeeds } from "@/components/run/plain";
 import { BestMatch, bestMatch, RunSummary } from "@/components/run/RunSummary";
+import { StopControls } from "@/components/run/StopControls";
+import { FoUsage } from "@/components/run/FoUsage";
+import type { LaneUsage } from "@/lib/usage";
 import { api, Button, buttonClass, ErrorNote, errText, Skeleton } from "@/components/ui";
 import type { CalibrationLines } from "@/lib/calibration";
 import { DISCLAIMER } from "@/lib/note";
@@ -24,7 +27,7 @@ import { StateDot } from "@/components/kit/State";
 
 const SEVERITY_INK: Record<string, string> = { "Life threatening": "text-nomatch", Severe: "text-chef", Mild: "text-ink-3" };
 
-type View = { run: Run; lanes: LaneView[]; scripts: Record<string, string>; calibration: CalibrationLines | null; calibrationNoCall: boolean };
+type View = { run: Run; lanes: LaneView[]; scripts: Record<string, string>; calibration: CalibrationLines | null; calibrationNoCall: boolean; usage: LaneUsage[] };
 type Pending = { laneId: string; kind: PendingKind; at: number };
 
 // the server has caught up with a tap: the callback or the booking is on the lane itself
@@ -220,6 +223,7 @@ export default function RunPage() {
                   <AlertsRow />
                 </div>
               )}
+              {run.mode !== "replay" && <StopControls runId={run.id} lanes={lanes} onChange={load} />}
             </div>
           )}
 
@@ -286,8 +290,9 @@ export default function RunPage() {
             <div className="order-6 mt-10 lg:mt-6 lg:first:mt-0">
               <LaneList runId={run.id} lanes={lanes} mode={run.mode} approved={approved} oneByOne={oneByOne} flash={flash} onChange={load} onOpen={setOpenId} />
               {run.mode !== "replay" && (
-                <div className="mt-6">
+                <div className="mt-6 space-y-4">
                   <FoConversations runId={run.id} onOpen={setOpenId} />
+                  <FoUsage runId={run.id} usage={view.usage ?? []} />
                 </div>
               )}
             </div>

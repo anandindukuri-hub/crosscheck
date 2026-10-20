@@ -114,6 +114,7 @@ export async function resumeTurn(conversationId: string, ctx: Ctx): Promise<Turn
   let r = await call("get_fo_reply", { conversationId, waitSeconds: 40 }, ctx);
   while (r.status === "working" && !r.isError && !isWaiting(r)) {
     if (r.progress) await ctx.onProgress(r.progress);
+    if (ctx.signal?.stopped) return { kind: "still_working", conversationId, text: r.progress };
     if (Date.now() - started > ceiling) return { kind: "still_working", conversationId, text: r.progress };
     r = await call("get_fo_reply", { conversationId, waitSeconds: 40 }, ctx);
   }
@@ -132,7 +133,7 @@ export async function waitForReport(conversationId: string, ctx: Ctx, ceilingMs 
   if (!seen) return waitOnReply(conversationId, ctx, ceilingMs, since, started);
   while (Date.now() - started < ceilingMs) {
     if (ctx.signal?.stopped) break;
-    await new Promise((r) => setTimeout(r, ctx.pollMs ?? 30_000));
+    await new Promise((r) => setTimeout(r, ctx.pollMs ?? 10_000));
     const r = await call("get_fo_conversation", { conversationId }, ctx);
     const newer = extractTurns(r.raw)
       .slice(seen)
@@ -148,7 +149,7 @@ export async function waitForReport(conversationId: string, ctx: Ctx, ceilingMs 
 
 async function waitOnReply(conversationId: string, ctx: Ctx, ceilingMs: number, since: string, started: number): Promise<TurnOutcome> {
   const call = ctx.call ?? callFo;
-  const poll = ctx.pollMs ?? 30_000;
+  const poll = ctx.pollMs ?? 10_000;
   while (Date.now() - started < ceilingMs) {
     if (ctx.signal?.stopped) break;
     const r = await call("get_fo_reply", { conversationId, waitSeconds: 40 }, ctx);

@@ -6,6 +6,7 @@ import { api, errText } from "./ui";
 export type AppStatus = {
   fo: { signedIn: boolean; tools: string[]; error: string | null };
   keys: { claude: boolean; jev: boolean; testPhone: boolean; fidelity: "verified" | "unverified" };
+  live?: { openRun: { id: string; when: string } | null; production: boolean; doNotCall: number };
 };
 
 type Snap = { data: AppStatus | null; error: string | null; at: number };

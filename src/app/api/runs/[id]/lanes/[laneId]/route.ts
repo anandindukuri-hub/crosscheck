@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { answerFo, askChef, book, callAgain, callAnyway, confirmBooking, confirmReconfirmReview, declineFo, foHasIt, requestReconfirm, resume, sendAgain, setAgreed } from "@/lib/engine";
+import { answerFo, askChef, book, callAgain, callAnyway, cancelFoCallback, confirmBooking, confirmReconfirmReview, declineFo, foHasIt, requestReconfirm, resume, sendAgain, setAgreed } from "@/lib/engine";
 import { fail, jsonBody, ok } from "@/lib/http";
 import { safeId } from "@/lib/store";
 
@@ -18,6 +18,7 @@ const Body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("call_anyway") }),
   z.object({ action: z.literal("reconfirm") }),
   z.object({ action: z.literal("reconfirm_reviewed"), keys: z.array(z.string().max(80)).max(40) }),
+  z.object({ action: z.literal("cancel_callback") }),
 ]);
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string; laneId: string }> }) {
@@ -39,6 +40,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string; la
     else if (b.action === "call_anyway") await callAnyway(runId, laneId);
     else if (b.action === "reconfirm") await requestReconfirm(runId, laneId);
     else if (b.action === "reconfirm_reviewed") await confirmReconfirmReview(runId, laneId, b.keys);
+    else if (b.action === "cancel_callback") await cancelFoCallback(runId, laneId);
     else await setAgreed(runId, laneId, b.agreed);
     return ok({ done: true });
   } catch (e) {

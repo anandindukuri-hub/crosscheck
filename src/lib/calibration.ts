@@ -32,6 +32,7 @@ export type CalibrationLines = {
   answers: Record<string, CalibrationAnswer>; // by check key, in call order
   groups: CalibrationGroup[]; // one spoken line per station, the way Fo now asks: once for the whole table
   readback: string;
+  optOut: string;
 };
 
 const TOPIC: Record<Station, string> = { hidden: "ingredients", fryer: "the fryer", surfaces: "cooking gear" };
@@ -81,6 +82,7 @@ export function calibrationLines(checks: CheckInstance[]): CalibrationLines {
     answers,
     groups: groupLines(checks, answers),
     readback: "Yes, that's right.",
+    optOut: "Yes, that's fine.",
   };
 }
 

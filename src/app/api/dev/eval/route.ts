@@ -1,6 +1,6 @@
 import { buildChecks } from "@/lib/checks";
 import { buildCase, buildCleanCallback, CASES, HERO, runCase } from "@/lib/dev/cases";
-import { asyncFeatureTests, customAsyncTests, customTests, practiceCallTests, featureTests, reviewAsyncTests, reviewTests, roundAsyncTests, roundTests, tonightAsyncTests, tonightTests } from "@/lib/dev/features";
+import { asyncFeatureTests, customAsyncTests, customTests, launchTests, practiceCallTests, scoreTests, featureTests, reviewAsyncTests, reviewTests, roundAsyncTests, roundTests, tonightAsyncTests, tonightTests } from "@/lib/dev/features";
 import { CALL_ENDED, classifyFoReply, mapSpeaker, parseReport } from "@/lib/report";
 import { decideLane } from "@/lib/rules";
 import { leaks, redact } from "@/lib/trace";
@@ -61,6 +61,8 @@ export async function GET() {
     ...customTests(),
     ...(await customAsyncTests()),
     ...(await practiceCallTests()),
+    ...(await launchTests()),
+    ...(await scoreTests()),
   ];
   const unitPassed = unit.filter((u) => u.pass).length;
   const passed = results.filter((r) => r.pass).length;

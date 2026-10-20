@@ -1,8 +1,9 @@
 // Real Fo work runs one lane at a time (parallel calls are unproven). A lane is pending from before its
 // first await until its turn comes, then active while it runs, so no button or Resume can queue it twice.
-export type Registry = { active: Set<string>; pending: Set<string>; chain: Promise<unknown>; locks: Map<string, Promise<unknown>> };
+// stopping: lanes Stop all calls reached mid turn. Their turn ends at the next poll and Fo is told to stop
+export type Registry = { active: Set<string>; pending: Set<string>; stopping: Set<string>; chain: Promise<unknown>; locks: Map<string, Promise<unknown>> };
 
-export const newRegistry = (): Registry => ({ active: new Set(), pending: new Set(), chain: Promise.resolve(), locks: new Map() });
+export const newRegistry = (): Registry => ({ active: new Set(), pending: new Set(), stopping: new Set(), chain: Promise.resolve(), locks: new Map() });
 
 export const busy = (reg: Registry, laneId: string) => reg.active.has(laneId) || reg.pending.has(laneId);
 

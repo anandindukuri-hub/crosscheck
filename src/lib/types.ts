@@ -81,6 +81,7 @@ export type ParsedReport = {
   noteOnBookingLine?: string | null; // the whole line with the speaker note, for the hedge word scan
   cookTonight: string | null; // reconfirm only
   email: string | null;
+  optOut?: string; // first call, MORE CALLS OK: a "no" means the kitchen asked not to be called again
   misc: string;
   duration: string;
 };
@@ -191,6 +192,9 @@ export type Lane = {
   calledAnyway?: string | null; // when Call anyway was tapped, so a later match never skips this lane again
   goAhead?: string | null; // when Fo first took your answer or began on its own. A call may be live, so a match never skips this lane
   reportAsked?: string | null; // when CrossCheck asked Fo once for the full report after a summary with none
+  stopPending?: { conversationId: string; text: string; at: string } | null; // a stop saved before ask_fo, sent again once after a restart
+  foCallback?: { text: string; at: string; cancelled?: string | null } | null; // Fo said it would call them again on its own
+  stoppedAt?: string | null; // Stop all calls reached this lane, so nothing queued for it goes out
   preview?: LanePreview | null; // Jev's answer while Claude still weighs in. Cleared when the real result lands
   events: LaneEvent[];
   startedAt: string | null;
@@ -212,6 +216,7 @@ export type Run = {
   countedAt: string | null; // when this run was added to the run count
   bookingName?: string; // who Fo calls for and books under. Older runs fall back to the first guest
   stopAtFirstMatch?: boolean; // stop calling new kitchens once one matches. Older runs call everyone
+  stoppedAt?: string | null; // when Stop all calls was tapped
   purpose?: "calibration";
   calibratedAt?: string | null; // calibration only: when this run's report was judged
   checks: Record<string, CheckInstance[]>; // by lane id (cuisine specific)

@@ -1758,12 +1758,130 @@ export async function practiceCallTests() {
     "The test call went cleanly. The kitchen suggested for Anand the salad and for guest two the noodles. All nine checks came back clear. The dish-by-dish readback was confirmed correct.";
   const { AFTER_CALL } = await import("../engine");
   return [
-    T("practice: one question per topic for the whole table, every check still asked", [script.questions.length, script.missing, script.questions.slice(1, 4).map((q) => q.text.includes("Ask this as one question"))], [5, [], [true, true, true]]),
+    T("practice: one question per topic for the whole table, every check still asked", [script.questions.length, script.missing, script.questions.slice(1, 4).map((q) => q.text.includes("Ask this as one question"))], [6, [], [true, true, true]]),
     T("practice: the grouped ingredients question names each guest", message.includes("Is there any shellfish or beef in Anand's dishes, or any peanut in Guest 2's dishes"), true),
     T("practice: the first call no longer asks for an email", [message.includes("email address"), message.includes("EMAIL:")], [false, false]),
     T("practice: one spoken line per topic and all three traps kept word for word", [lines.groups.length, lines.groups.map((g) => g.tests.filter((t) => t !== "first_hand"))], [3, [["hedge"], ["shared_fryer"], ["relay"]]]),
     T("practice: the trap lines read naturally inside the grouped lines", [lines.groups[0].say.includes("And I think there's no peanut"), lines.groups[1].say.includes("But the shrimp goes in the same fryer"), lines.groups[2].say.includes("For the peanut, hold on, let me ask the cook")], [true, true, true]),
     T("practice: an empty Fo reply shows Fo's last words from the conversation", [empty.text, empty.kind], [ready, "other"]),
     T("practice: a summary after the call asks Fo for the report, a call still to come does not", [AFTER_CALL.test(summary), AFTER_CALL.test(ready), AFTER_CALL.test("Dialing now. I'll come back with the full report once the call wraps.")], [true, false, false]),
+  ];
+}
+
+// Monday's live calls: Fo redialed, set callbacks and arranged a human caller on its own, stops waited behind
+// queued calls and two runs called the same kitchens. These hold the fixes in place
+export async function launchTests() {
+  const { liveBlocked, LIVE_RUN_OPEN, CALLED_RECENTLY, SAY_IF_BOOKED, withOpening, stopText, AFTER_CALL } = await import("../engine");
+  const { selfCallback } = await import("../report");
+  const checks = buildChecks(HERO, "thai");
+  const r = fakeLane.restaurant as Restaurant;
+  const said = [callMessage(fakeRun(), r, checks, "<FO_TEST_PHONE>"), callbackMessage(fakeRun(), r, [{ check: checks[0], quote: "I think so" }], "<FO_TEST_PHONE>"), reconfirmMessage(fakeRun(), r, checks, "<FO_TEST_PHONE>")];
+  const fo = {
+    ihop: "That's twice now, so I've stopped redialing and a human caller is placing the allergy call for me.",
+    redial: "The first call got through to a person but was cut off, so I've set a redial for 12:10 PM.",
+    alchemy: "I've set a callback for 2:00 PM today with the full script.",
+    draper: "They picked up to voicemail. I'll give it another ring shortly in case someone's on the floor now.",
+    greenbush: "Greenbush Bar is closed until 4:30 PM today, so I've scheduled the call for 4:30 PM, with your exact script and no booking on the call.",
+  };
+  const fine = [
+    "Done. I won't redial or set anything up.",
+    "CALL OUTCOME: busy, call back at 2 PM today",
+    "Calling now. The report will follow when the call wraps.",
+    "They asked us to call again at 5.",
+    "OTHER: try again after 5",
+    "I didn't redial and haven't set a callback.",
+    "I hung up without redialing.",
+    "Cancelled the 2 PM callback and the redial.",
+    'She said "we can call them back later".',
+    "I cancelled the callback and the redial.",
+  ];
+  const lane = (phone: string, status: Lane["status"], hoursAgo: number, began = true) => ({
+    restaurant: { ...r, phone },
+    status,
+    skipped: null,
+    goAhead: began ? "x" : null,
+    reports: [],
+    phase: "call" as Lane["phase"],
+    booking: null as Lane["booking"],
+    startedAt: new Date(Date.parse(AT) - hoursAgo * 3600_000).toISOString(),
+    updatedAt: AT,
+  });
+  const at = Date.parse(AT);
+  const noAnswer = { state: "no_answer", headline: "No answer yet", reasons: ["No one answered"], checks: [], dishes: [], decider: "jev", decidedAt: AT, misconception: 0 } as unknown as LaneResult;
+  return [
+    T("launch: every call message says one call only, no voicemail message and report first", said.map((m) => [m.includes("Make one call only. Do not redial"), m.includes("hang up without leaving a message"), m.includes("must be the report"), m.includes("ask when to call back")]), said.map(() => [true, true, true, false])),
+    T("launch: the first call says the number is the right one", said[0].includes("Use it as written."), true),
+    T("launch: Fo's own redials, callbacks and human caller are caught", Object.values(fo).map((t) => !!selfCallback(t)), [true, true, true, true, true]),
+    T("launch: Fo following the rule or a kitchen's own call back time is not a plan", fine.map((t) => selfCallback(t)), fine.map(() => null)),
+    T("launch: a finished call that promises the report gets the report asked for, not an 8 minute wait", [classifyFoReply("The call is complete. The chef said there is no peanut. I'll send you the full report."), AFTER_CALL.test("The call is complete. The chef said there is no peanut. I'll send you the full report."), classifyFoReply("I'm going out on a limb here.")], ["other", true, "other"]),
+    T("launch: Fo's own plan in a report field still counts, a mid call update never asks for the report", [!!selfCallback("OTHER: I've set a redial for 3 PM."), AFTER_CALL.test("On the call, they said the fryer is shared. Still talking with the chef.")], [true, false]),
+    T("launch: closed until further notice gives no time", withOpening(noAnswer, "They are closed until further notice.").reasons, ["No one answered"]),
+    T("launch: a live call going out or underway is waited on, never asked about", [classifyFoReply("The call to Alchemy is going out now. I'll post their answers here."), classifyFoReply("Call's underway at Osteria Papavero, and I'll deliver the full report in your format by about 11:45 AM.")], ["underway", "underway"]),
+    T("launch: one real run at a time, a finished or stopped run does not block", [liveBlocked([{ restaurant: r }], [{ lanes: [lane("6085550100", "calling", 0)] }], at), liveBlocked([{ restaurant: r }], [{ lanes: [lane("6085550100", "done", 0)] }], at)], [LIVE_RUN_OPEN, null]),
+    T("launch: a stopped booking waiting on Did Fo book it? names the way out", liveBlocked([{ restaurant: { ...r, phone: "6085550199" } }], [{ lanes: [{ ...lane("6085550100", "needs_you", 0), phase: "booking", booking: { status: "needs_you", text: "", at: AT } }] }], at), SAY_IF_BOOKED(r.name)),
+    T("launch: the same kitchen is not called again within 12 hours", [liveBlocked([{ restaurant: { ...r, phone: "(608) 555-0177" } }], [{ lanes: [lane("608-555-0177", "done", 2)] }], at), liveBlocked([{ restaurant: { ...r, phone: "(608) 555-0177" } }], [{ lanes: [lane("608-555-0177", "done", 13)] }], at), liveBlocked([{ restaurant: { ...r, phone: "(608) 555-0177" } }], [{ lanes: [lane("608-555-0177", "done", 1, false)] }], at)], [CALLED_RECENTLY(r.name), null, null]),
+    T("launch: a closed kitchen says when it opens", withOpening(noAnswer, fo.greenbush).reasons, ["Closed until 4:30 PM today. Try them again after they open."]),
+    T("launch: the stop names the kitchen and cancels any callback", [stopText("Cento").includes("Do not call Cento again"), stopText("Cento").includes("cancel any callback")], [true, true]),
+  ];
+}
+
+// what Fo may write in MORE CALLS OK
+const OPTS_OUT = ["no", "no, \"please don't call again\"", "No.", "**No**", "No \"we would rather not\"", "\"No thanks\"", "\"Please don't call again\"", "\"We'd rather not\"", "\"Please stop calling us\"", "they said they do not want calls like this"];
+const STAYS_IN = [
+  "\"No problem\"", "no problem", "\"No worries\"", "No, that's fine", "yes, \"No problem\"", "yes, \"please don't call during dinner rush\"", "yes", "Yes, sure", "\"Sure, anytime\"", "not asked", "nothing", "",
+  "\"Just don't call during the dinner rush\"", "\"Just don't call back during the rush\"", "\"You don't need to ask, call anytime\"", "\"Please do, we don't want to miss a booking\"", "\"Definitely, no thanks needed\"",
+];
+
+// Tuesday's score features: the kitchen opt out, the Fo usage panel and the real runs record
+export async function scoreTests() {
+  const { optedOut, blockedByOptOut, addDoNotCall, listDoNotCall, removeDoNotCall } = await import("../donotcall");
+  const { foUsage, realRuns } = await import("../usage");
+  const { OPTED_OUT } = await import("../engine");
+  const r = { ...(fakeLane.restaurant as Restaurant), phone: "(608) 555-0123" };
+  const message = callMessage(fakeRun(), r, buildChecks(HERO, "thai"), "<FO_TEST_PHONE>");
+  const dir = await mkdtemp(path.join(os.tmpdir(), "cc-dnc-"));
+  const file = path.join(dir, "donotcall.json");
+  let list: unknown[] = [];
+  try {
+    await addDoNotCall(r, "run1", file);
+    await addDoNotCall({ ...r, phone: "608-555-0123" }, "run2", file);
+    const added = await listDoNotCall(file);
+    const blocked = blockedByOptOut([{ name: "Other", phone: "6085550199" }, r], added)?.name ?? null;
+    await removeDoNotCall("+1 608 555 0123", file);
+    list = [added.length, blocked, (await listDoNotCall(file)).length];
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+  const events = [
+    { actor: "fo", action: "ask_fo", laneId: "l1", input: { message: "Please call the restaurant named \"X\" at 1 for me" } },
+    { actor: "fo", action: "get_fo_reply", laneId: "l1", input: {} },
+    { actor: "fo", action: "get_fo_conversation", laneId: "l1", input: {} },
+    { actor: "fo", action: "get_fo_conversation", laneId: "l1", input: {} },
+    { actor: "fo", action: "ask_fo", laneId: "l1", input: { message: "Please stop. Do not call X again" } },
+    { actor: "claude", action: "judge", laneId: "l1", input: {} },
+    { actor: "fo", action: "list_fo_conversations", input: {} },
+  ] as Parameters<typeof foUsage>[0];
+  const usage = foUsage(events, [{ id: "l1", restaurant: r }]);
+  const lanes = (over: Partial<Lane>[]) => over.map((o) => ({ restaurant: r, result: null, booking: null, skipped: null, goAhead: null, reports: [], stoppedAt: null, progress: "", ...o }) as Lane);
+  const runs = realRuns([
+    { run: { id: "a", createdAt: AT, mode: "live", approvedAt: AT, stoppedAt: null }, lanes: lanes([{ booking: { status: "done", text: "", at: AT } }, { skipped: { reason: "", at: AT } }]) },
+    { run: { id: "b", createdAt: AT, mode: "live", approvedAt: AT, stoppedAt: AT }, lanes: lanes([{ goAhead: AT }]) },
+    { run: { id: "c", createdAt: AT, mode: "test", approvedAt: AT, stoppedAt: null }, lanes: lanes([{}]) },
+  ]);
+  return [
+    T("score: the first call asks once if it may call again and reports the answer", [message.includes("Is it OK if we call you again, to book this table"), message.includes("MORE CALLS OK:"), parseReport("MORE CALLS OK: no, \"please don't call again\"\nCALL OUTCOME: answered").optOut?.startsWith("no")], [true, true, true]),
+    T(
+      "score: a no or a clear refusal opts a kitchen out, a yes, a friendly filler or a passing remark never does",
+      [...OPTS_OUT.map((x) => [x, optedOut(x)]), ...STAYS_IN.map((x) => [x, optedOut(x)]), ["null", optedOut(null)]],
+      [...OPTS_OUT.map((x) => [x, true]), ...STAYS_IN.map((x) => [x, false]), ["null", false]],
+    ),
+    T("score: the do not call list keeps one entry per phone, blocks it and can be cleared", list, [1, r.name, 0]),
+    T("score: the refusal names the kitchen", OPTED_OUT("Cento").startsWith("Cento asked not to get calls like this"), true),
+    T("score: the allergy note asks the kitchen to correct anything wrong", allergyNote(fakeRun(), { ...fakeLane, result: caseOf("good_thai", HERO).result } as Lane).includes("If anything here is wrong, please tell us"), true),
+    T("score: Fo usage lists every Fo tool per kitchen with why, never Claude or Jev", usage.map((u) => [u.restaurant, u.tools.map((t) => [t.tool, t.count, t.why])]), [
+      [r.name, [["ask_fo", 2, ["sent the call request", "told Fo to stop"]], ["get_fo_reply", 1, ["waited for Fo's reply"]], ["get_fo_conversation", 2, ["read Fo's report as it came in"]]]],
+      [null, [["list_fo_conversations", 1, ["listed this run's Fo conversations"]]]],
+    ]),
+    T("score: the real runs record shows bookings, kitchens not called and stops, and leaves test runs out", runs.map((x) => [x.id, x.stopped, x.kitchens.map((k) => k.outcome)]), [["a", false, ["Booked", "Not called"]], ["b", true, ["Stopped"]]]),
   ];
 }

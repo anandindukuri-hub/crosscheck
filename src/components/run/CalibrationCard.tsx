@@ -50,6 +50,7 @@ export function CalibrationCard(props: { runId: string; lines: CalibrationLines;
       return { cue: `When Fo asks about ${g.topic}`, say: smart(g.say), note: traps.length ? traps.map((t) => TESTS[t]).join(" ") : TESTS.first_hand, trap: traps.length > 0 };
     }),
     { cue: "When Fo repeats the answers", say: smart(lines.readback) },
+    { cue: "When Fo asks if it can call you again", say: smart(lines.optOut) },
   ];
 
   // The lit line comes from state alone. Next, Previous, a tap or a key sets it, then scrolls that line to the middle of

@@ -7,6 +7,8 @@ import { smart } from "@/components/kit/typo";
 import { topicTitle } from "@/components/run/plain";
 import { capFirst, fmtDate, fmtDateTime, speakerLabel } from "@/lib/labels";
 import { isFresh, readLedger, type LedgerRecord } from "@/lib/ledger";
+import { listDoNotCall } from "@/lib/donotcall";
+import { DoNotCallList } from "@/components/DoNotCallList";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Kitchen answers" };
@@ -15,7 +17,7 @@ export const metadata: Metadata = { title: "Kitchen answers" };
 const ANSWER = { pass: { label: "Matched", tone: "matched" }, escalate: { label: "Needs the chef", tone: "chef" }, fail: { label: "Did not match", tone: "nomatch" } } as const;
 
 export default async function Ledger() {
-  const records = await readLedger();
+  const [records, doNotCall] = await Promise.all([readLedger(), listDoNotCall()]);
   const byPlace = new Map<string, LedgerRecord[]>();
   for (const r of records) byPlace.set(r.restaurantId, [...(byPlace.get(r.restaurantId) ?? []), r]);
   const places = [...byPlace.values()].sort((a, b) => b[0].verifiedAt.localeCompare(a[0].verifiedAt));
@@ -75,6 +77,7 @@ export default async function Ledger() {
             );
           })
         )}
+        <DoNotCallList initial={doNotCall} />
       </div>
     </div>
   );
