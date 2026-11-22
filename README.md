@@ -1,6 +1,6 @@
 # CrossCheck
 
-**An AI that phones restaurants about your table's food allergies. Plain code, not the AI, checks every answer before anything is booked.**
+**An app whose AI caller phones restaurants about your table's food allergies. Plain code, not the AI, checks every answer before anything is booked.**
 
 **3rd place ($300)** at the Wajo x Anthropic GSD hackathon, October 2026. Built solo by Anand Indukuri.
 
@@ -27,7 +27,7 @@ For people with severe food allergies, celiac disease or a no beef diet who call
 
 **Checks:** `npm test` runs 29 scripted kitchens through the rules and 295 unit checks, with no keys. GitHub runs lint, build, type check and `npm test` on every push to main.
 
-The README, the code comments, a few app and test strings, the npm test command, the GitHub check and the dependency versions changed after the event.
+The README, the code comments, a few app and test strings, the npm test command, the GitHub check and the dependency versions changed after the event. The judged version is tagged hackathon-submission.
 
 ## What it does
 
