@@ -8,7 +8,7 @@ import { buildScript } from "@/lib/script";
 import { bumpStats } from "@/lib/trace";
 import { CUISINES } from "@/lib/types";
 
-// Dev only: the rules eval (S3a) and the script coverage check (S2a). curl localhost:3000/api/dev/eval
+// Dev only: the rules eval and the script coverage check. curl localhost:3000/api/dev/eval
 export async function GET() {
   if (process.env.NODE_ENV === "production") return Response.json({ error: "dev only" }, { status: 404 });
   const results = CASES.map(runCase);
@@ -24,7 +24,7 @@ export async function GET() {
   // callback that names a different dish must not reuse the first call's answers
   const first = runCase(CASES.find((c) => c.id === "hedge")!).result;
   const cb = buildCleanCallback(HERO, "thai", new Set(first.checks.filter((v) => v.outcome !== "pass").map((v) => v.key)));
-  cb.parsed.dishes = "Anand: tofu pad see ew with no oyster sauce, vegetable fried rice | Guest 2: pad thai";
+  cb.parsed.dishes = "Alex: tofu pad see ew with no oyster sauce, vegetable fried rice | Guest 2: pad thai";
   const cbNew = decideLane({ checks: buildChecks(HERO, "thai"), diners: HERO, parsed: cb.parsed, decisions: cb.decisions, judgement: { ...cb.judgement, dishes: [] }, fidelity: "verified", prior: first });
   const firstMyth = { ...first, misconception: 0.4 };
   const cb2 = buildCleanCallback(HERO, "thai", new Set(first.checks.filter((v) => v.outcome !== "pass").map((v) => v.key)));

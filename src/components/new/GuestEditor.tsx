@@ -23,7 +23,7 @@ export const ALLERGEN_LABEL: Record<(typeof ALLERGEN_KEYS)[number], string> = {
   gluten: "Celiac (gluten)",
 };
 
-// for the severity control's name: "How serious is the mollusk allergy for Anand"
+// for the severity control's name: "How serious is the mollusk allergy for Alex"
 const allergyName = (a: (typeof ALLERGEN_KEYS)[number]) =>
   a === "gluten" ? "celiac (gluten)" : `the ${a === "mollusk" ? "mollusk" : a === "tree_nut" ? "tree nut" : ALLERGEN_LABEL[a].toLowerCase()} allergy`;
 

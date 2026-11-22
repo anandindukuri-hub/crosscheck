@@ -1,19 +1,44 @@
 # CrossCheck
 
-**An AI that phones restaurants about your table's food allergies. Only a kitchen that clears every check can be booked.**
+**An AI that phones restaurants about your table's food allergies. Plain code, not the AI, checks every answer before anything is booked.**
 
-For people with severe food allergies, celiac disease or a no beef diet who call restaurants before they eat out. It runs on your own computer. Add any US restaurant by its phone number. Before a real call you must tick that the restaurant agreed to a short AI call. You ask them yourself first.
+**3rd place ($300)** at the Wajo x Anthropic GSD hackathon, October 2026. Built solo by Anand Indukuri.
+
+```mermaid
+flowchart LR
+    phone["On the call<br>Fo, the AI caller, asks the kitchen"]
+    quiet["No answer yet or Declined<br>nothing is booked"]
+    check["Checking the answers<br>AI models read them<br>Plain code applies the rule"]
+    matched["Matched<br>you can book"]
+    review["Ready for your review<br>tick each quote, then book"]
+    chef["Needs the chef<br>one callback with your OK"]
+    nomatch["Did not match<br>not booked"]
+    phone -->|nobody answered or they said no| quiet
+    phone -->|answered| check
+    check --> matched
+    check --> review
+    check --> chef
+    check --> nomatch
+```
+
+For people with severe food allergies, celiac disease or a no beef diet who call restaurants before they eat out. It runs on your own computer. Add any US restaurant by its phone number. You ask each restaurant yourself first whether a short AI call is OK. Real calls go only to the ones you tick.
+
+**Try it with no keys:** `npm ci`, `npm run build` and `npm start`, then open http://localhost:3000/setup and tap **Try a sample table**. Four made up kitchens answer from a script. Nothing is called or sent.
+
+**Checks:** `npm test` runs 29 scripted kitchens through the rules and 295 unit checks, with no keys. GitHub runs lint, build, type check and `npm test` on every push to main.
+
+The README, the code comments, a few app and test strings, the npm test command, the GitHub check and the dependency versions changed after the event.
+
+## What it does
 
 The fries have no shrimp in them. They can still fry in the same oil as the shrimp. People with severe allergies or celiac disease call ahead to ask, one restaurant at a time. Often a host guesses "should be fine." CrossCheck makes those calls for your whole table and asks the chef.
 
 - **Fo** (Wajo's AI caller, used through its MCP server) phones each restaurant. It opens with who it is calling for and why, then says it is an AI assistant, before it asks anything. Then it asks the chef about hidden ingredients, the fryer and shared pans for every guest.
-- **Claude** reads every answer and quotes the kitchen's words as Fo wrote them in its report. **Jev** (TypeSafe AI's confidence model) turns each answer into a typed choice and says how sure it is, from 0 to 1.
+- **Jev** (TypeSafe AI's confidence model) turns each answer into a typed choice and says how sure it is, from 0 to 1. **Claude** reads the report too when Jev is less sure and quotes the kitchen's words as Fo wrote them in its report.
 - **Plain code decides.** A check passes only when Jev picks a passing answer at 0.9 confidence or higher, the person who answered said it first hand, nothing was hedged and the kitchen confirmed Fo's read back.
-- **You approve every call and the booking.** Fo books only a kitchen that cleared every check. It sends the kitchen a written allergy note with the answers its staff gave. You get a table pass to show your server.
+- **You approve every call and the booking.** Fo books only a kitchen that cleared every check. When Jev is missing or the practice call has not passed, it books only after you read and tick each quote. It sends the kitchen a written allergy note with the answers its staff gave. You get a table pass to show your server.
 
-Built by Anand Indukuri for the Wajo x Anthropic Get Sh\*t Done hackathon, October 2026.
-
-## How it decides
+<details><summary>How it decides</summary>
 
 Models never decide. Claude and Jev return typed answers and `src/lib/rules.ts` applies one rule. For each allergy or diet, Fo asks about up to three things: hidden ingredients, the fryer and shared pans.
 
@@ -24,26 +49,28 @@ Models never decide. Claude and Jev return typed answers and `src/lib/rules.ts` 
 3. Nothing is hedged. Jev's separate "is this answer hedged?" score is under 0.20 and the words have no hedge such as "I think" or "usually".
 4. The kitchen confirmed Fo's read back.
 
-**Jev first, Claude when it matters.** Jev reads the report in a fraction of a second. When it is at least 0.9 sure on every answer (a clear match or a clear rule out) the rule decides at once. When Jev is less sure about anything, Claude reads the whole report too. A check then passes only if Claude reads it the same way.
+**Jev first, Claude when it matters.** Jev reads the report in a fraction of a second. When Jev's reading alone settles the kitchen (a clear match or one answer that clearly rules it out) the rule decides at once. Otherwise Claude reads the whole report too. A check then passes only if Claude reads it the same way. A report Fo writes as free text goes to Claude first.
 
 **A kitchen matches only when** every check passes for every guest, the kitchen said it can accommodate the table and it named dishes for each guest.
 
 **Ruling out and asking the chef:**
 
-- Ruling a kitchen out is the cautious direction, so it needs less proof: Jev at 0.9 on its own or 0.75 when Claude reads it the same way.
+- Ruling a kitchen out is the cautious direction. It needs less proof: Jev at 0.9 on its own or 0.75 when Claude reads it the same way.
 - When Jev scores an answer 0.30 or more as a possible allergy myth (like "frying kills it"), Fo asks the chef. At 0.95 or more the kitchen is ruled out.
 - Anything else that is unclear means Needs the chef. With your OK, Fo calls back once and asks only those questions. Nothing is booked on a guess.
 
 **Two more locks:**
 
-- First, a practice call to your own phone checks that Fo's report keeps words like "I think" or "we share the fryer". CrossCheck never hears the call itself. Claude and Jev read Fo's written report. Until the practice call passes, no kitchen matches on its own. It stops at Ready for your review and you tick each quote before you book.
+- First, a practice call to your own phone checks that Fo's report keeps words like "I think" or "we share the fryer". CrossCheck never hears the call itself. The AI models only read Fo's written report. Until the practice call passes, no kitchen matches on its own. It stops at Ready for your review and you tick each quote before you book.
 - If Jev is missing or cannot be reached, the rule runs on Claude's reading alone and every match stops at Ready for your review.
 
 The cutoffs were set on live Jev output before the first real call. Clean answers scored 0.03 to 0.08 on the hedge score. A real "I think" scored 0.98.
 
 Each kitchen ends as Matched, Ready for your review, Needs the chef, Did not match, No answer yet or Declined.
 
-## Run it yourself
+</details>
+
+<details><summary>Run it yourself</summary>
 
 You need:
 
@@ -76,7 +103,7 @@ Steps:
    npm start
    ```
    Use `npm run dev` instead while you change code. Both serve http://localhost:3000 on this computer only.
-5. Open http://localhost:3000/setup. When Your phone, Fo and Answer checks are ready, tap **Start the practice call**. On the run page tap **Send to Fo**, then **Yes, go ahead** when Fo asks. Your phone rings. You play the chef and read each line on the **Your lines** card. The result shows Verified or Not verified with each signal. Once it passes, Setup says **CrossCheck is ready**. The practice call uses a fixed sample table (Anand and Guest 2) so the lines always match Fo's questions. Below it, **Ready for a real run** checks Fo, the answer checks, the practice call, that no other real run is going and that you are on the production build.
+5. Open http://localhost:3000/setup. When Your phone, Fo and Answer checks are ready, tap **Start the practice call**. On the run page tap **Send to Fo**, then **Yes, go ahead** when Fo asks. Your phone rings. You play the chef and read each line on the **Your lines** card. The result shows Verified or Not verified with each signal. Once it passes, Setup says **CrossCheck is ready**. The practice call uses a fixed sample table (Alex and Guest 2) so the lines always match Fo's questions. Below it, **Ready for a real run** checks Fo, the answer checks, the practice call, that no other real run is going and that you are on the production build.
 6. Tap **Start a table**. Type the **Name for the booking**, then add each guest's allergies and how serious each one is. Pick any of the 9 major food allergens or type another under **Other allergens** (up to 3 per guest). Shellfish comes as two choices, crustaceans and mollusks. Wheat is covered by the Celiac (gluten) choice. Pick **When**, then **Next: Kitchens**.
 7. Under **Who answers** pick **Real calls**. Search the Madison quick picks or tap **Add a restaurant** and enter any US restaurant's name, phone number and cuisine. Pick up to 5, then **Review calls**.
 8. Ask each restaurant once whether a short AI call about allergies is OK, by phone or in person. Fo asks every allergy question after that. On **Review the calls** tick each one that said yes. Tap **Send to Fo**, then **Start calls**.
@@ -92,13 +119,13 @@ Steps:
 
 With no keys at all the app still starts and Sample tables work.
 
-### Without a Jev key
+**Without a Jev key**
 
 - **Sample** needs no keys. Four made up kitchens answer from a script. Nothing is called or sent.
 - With a Claude key, Fo signed in and `FO_TEST_PHONE` set, turn on **Show developer modes** at /setup/developer and pick **Test calls** under Who answers. Fo calls your own phone and you play each kitchen. Only Claude reads the answers. A kitchen that clears its checks stops at **Ready for your review** and you tick each quote before booking.
 - **Real calls** stay off until a Jev key is added.
 
-### Who answers
+**Who answers**
 
 | Choice | Who picks up | Use it for |
 |---|---|---|
@@ -106,19 +133,22 @@ With no keys at all the app still starts and Sample tables work.
 | Test calls | Your own phone. You play each kitchen. The booking note goes to your own inbox. Turn on **Show developer modes** at /setup/developer to see it. | Trying the full loop without calling a restaurant |
 | Sample | Four made up kitchens from a script. Nothing is called or sent. | Seeing how it works |
 
-### Commands
+**Commands**
 
 | Command | What it does |
 |---|---|
 | `npm run dev` | Dev server with hot reload on http://localhost:3000 |
 | `npm run build` then `npm start` | Production server on http://localhost:3000 |
 | `npm run fo:login` | Signs in to Fo once |
-| `npm run typecheck`, `npm run lint` | Type check and lint |
-| `curl localhost:3000/api/dev/eval` | Dev server only. Runs 29 scripted kitchens through the parser and the rules, 278 unit checks and a check that every cuisine's script asks every required question |
+| `npm run typecheck`, `npm run lint` | Type check (after `npm run build`) and lint |
+| `npm test` | Starts the dev server on a free local port, runs the eval below, prints the totals and fails if any check fails. Needs no keys |
+| `curl localhost:3000/api/dev/eval` | Dev server only. Runs 29 scripted kitchens through the parser and the rules, unit checks and a check that every cuisine's script asks every required question |
 
 Port 3000 taken? Run `npx next dev -H 127.0.0.1 -p 3001`. Any port on localhost works.
 
-## Privacy and your data
+</details>
+
+<details><summary>Privacy and your data</summary>
 
 - **Nothing is hosted.** There is no CrossCheck server or account. Everything the app keeps is in the `.data` folder of your copy, which git ignores: runs, run traces, kitchen answers, restaurants you added, kitchens that asked not to be called, settings, run counts and your Fo sign in.
 - **Only this computer.** The app binds to 127.0.0.1. It refuses requests addressed to any other host, posts from another site and API reads from another site.
@@ -126,7 +156,9 @@ Port 3000 taken? Run `npx next dev -H 127.0.0.1 -p 3001`. Any port on localhost 
 - **Guest names.** Friends you leave unnamed stay "Guest 2" on every call, note, pass and export.
 - **Run trace.** "Download the run trace" saves every Fo, Claude and Jev call in a run. It removes what it can find of phone numbers, emails, sign in values, staff names and the names of places you did not book. Read it before you share it.
 
-## Trust by design
+</details>
+
+<details><summary>Trust by design</summary>
 
 - **You approve every outward action.** Calls, the chef callback and the booking each need a tap. Fo's own questions to you show up on that restaurant's card in the app, in Fo's exact words.
 - **Kitchens can say no more calls.** Fo ends its first call to each kitchen by asking: "Is it OK if we call you again, to book this table or for other guests with allergies?" A no puts the kitchen on a do not call list. CrossCheck then makes no call to it at all (no chef callback, booking call or reconfirm) until you take it off. The allergy note asks the kitchen to tell us if anything in it is wrong.
@@ -137,7 +169,9 @@ Port 3000 taken? Run `npx next dev -H 127.0.0.1 -p 3001`. Any port on localhost 
 - **Quotes are checked.** A quote Claude cites must appear word for word in Fo's report or it is dropped.
 - **No "safe" in the app.** Cards say who said what and when. The run page, every kitchen card and the table pass carry: "CrossCheck relays what staff said. Not a guarantee." The allergy note tells the kitchen the same. It is not medical advice.
 
-## What you get
+</details>
+
+<details><summary>What you get</summary>
 
 - **A table, not a person.** Up to 4 guests with allergies or diets. One call per kitchen covers everyone. Fo asks about the ingredients, the fryer and the cooking gear once each for the whole table, then files a named answer per allergen. A call holds up to 12 checks.
 - **Any allergen.** The 9 major food allergens are choices, each with how serious it is (Life threatening, Severe or Mild). Type up to 3 others per guest, such as mustard. A typed allergen gets the same three questions and the same strict rule. A name a choice already covers, such as shrimp, points you to that choice. A No beef diet can also rule out shared grills and fryers.
@@ -146,7 +180,7 @@ Port 3000 taken? Run `npx next dev -H 127.0.0.1 -p 3001`. Any port on localhost 
 - **Any US restaurant.** Add a restaurant by name and phone number. It shows under Added by you and you can remove it. Madison, WI quick picks are built in.
 - **Your name on the calls.** The Name for the booking is the name Fo gives on every call, the chef callback, the booking, the reconfirm and the allergy note.
 - **Most likely match first.** Fo calls one kitchen at a time: a kitchen that already matched for this table, then the one whose cuisine overlaps least with your table's allergies, then your order. With "Stop calling once a kitchen matches" on (the default), every kitchen after a true match shows Not called and nothing is sent for it. "Call anyway" calls one after all.
-- **No verdict before the rule.** While Claude and Jev read the report, the kitchen shows Checking the answers. Nothing can be booked until both finish.
+- **No verdict before the rule.** While the answers are being read, the kitchen shows Checking the answers. Nothing can be booked until the reading is done and the rule decides.
 - **Practice call before trust.** A call to your own phone checks that Fo's report keeps unsure words like "I think", answers passed on by other staff and a shared fryer. Until it passes, CrossCheck never matches a kitchen on its own. You read and tick each quote instead.
 - **Kitchen answers.** Every answer is a dated record on the Kitchen answers page. Answers about life threatening and severe allergies expire after 7 days and mild ones after 30. If a kitchen already answered these exact questions for this exact table recently, CrossCheck skips the call. A later unclear or failing answer from that kitchen blocks reuse.
 - **Booking with a cap.** Fo books under your name. It pays a deposit only up to the cap you pick (Ask me first or up to $25, $50 or $100). It emails the kitchen the allergy note. When a kitchen has no email, Fo reads the note to them. If Fo's reply is unclear, a "Did Fo book it?" card lets you say.
@@ -157,14 +191,18 @@ Port 3000 taken? Run `npx next dev -H 127.0.0.1 -p 3001`. Any port on localhost 
 - **Alerts.** The tab title and a notification tell you when Fo needs your answer, since calls take minutes.
 - **A record of every real run.** Developer setup lists each real run with what every kitchen gave back, booked or not and whether you stopped it.
 
-## Why
+</details>
+
+<details><summary>Why</summary>
 
 - Nearly half of reported fatal food allergy reactions over 13 years were caused by food from a restaurant or other food service place (Radke et al., CDC MMWR, 2017).
 - In a CDC survey of restaurant managers in the same report, 10.3% of those whose restaurant had a fryer kept a special fryer for allergen free food. Only 7.6% had a separate area to prepare it.
 - 53.9% of restaurant reactions in the FARE patient registry happened even after staff were told about the allergy (Oriel et al., J Allergy Clin Immunol Pract, 2021).
 - 35% of restaurant staff surveyed believed fryer heat destroys allergens (Ahuja and Sicherer, Annals of Allergy, Asthma and Immunology, 2007).
 
-## Roadmap
+</details>
+
+<details><summary>Roadmap</summary>
 
 - **A hosted version.** Accounts, a database in place of the `.data` folder and a Fo sign in for each user. Then anyone can use it without running code.
 - **Restaurants near you.** Quick picks cover Madison, WI today. Next is a lookup by city so nobody types phone numbers.
@@ -175,7 +213,9 @@ Port 3000 taken? Run `npx next dev -H 127.0.0.1 -p 3001`. Any port on localhost 
 - **Recalibration.** Tune the cutoffs again as more real calls come in.
 - **Beyond the US.** Phone numbers and call scripts for other countries and languages.
 
-## What is in the repo
+</details>
+
+<details><summary>What is in the repo</summary>
 
 | Path | What it does |
 |---|---|
@@ -200,11 +240,15 @@ Port 3000 taken? Run `npx next dev -H 127.0.0.1 -p 3001`. Any port on localhost 
 | `scripts/fo-login.ts` | The one time Fo sign in |
 | `data/madison-restaurants.json` | 129 Madison restaurants with a phone number |
 
-## Data and credit
+</details>
+
+<details><summary>Data and credit</summary>
 
 - Madison quick picks © OpenStreetMap contributors, available under the [Open Database License (ODbL 1.0)](https://www.openstreetmap.org/copyright). Fetched Oct 18, 2026 through the Overpass API.
 - The questions Fo asks are based on public guidance from FARE, the Celiac Disease Foundation, Beyond Celiac and the FDA Food Code.
 - The numbers under Why come from [Radke et al., CDC MMWR, 2017](https://www.cdc.gov/mmwr/volumes/66/wr/mm6615a2.htm), Oriel et al., J Allergy Clin Immunol Pract, 2021 and Ahuja and Sicherer, Annals of Allergy, Asthma and Immunology, 2007.
+
+</details>
 
 ## License
 

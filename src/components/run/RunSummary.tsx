@@ -283,7 +283,7 @@ export function BestMatch({
           </p>
           {matched && (
             <p className="type-footnote mt-1 text-ink-2">
-              Claude and Jev read every answer the same way. {readBackBy(lane)} heard Fo repeat the answers and said they were right.
+              Every answer was first hand, with no hedging. {readBackBy(lane)} heard Fo repeat the answers and said they were right.
               <button
                 type="button"
                 onClick={() => setWhy((w) => !w)}

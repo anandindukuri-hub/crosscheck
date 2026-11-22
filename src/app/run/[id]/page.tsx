@@ -196,7 +196,7 @@ export default function RunPage() {
                 const severe = needs.some((x) => x.severity === "Severe");
                 const allergies = needs.filter((x) => x.severity);
                 const diets = needs.filter((x) => !x.severity);
-                // every allergy says how serious it is: "Anand · shellfish · Severe · no beef, no contact"
+                // every allergy says how serious it is: "Alex · shellfish · Severe · no beef, no contact"
                 return (
                   <li key={d.id} className="flex items-baseline gap-2">
                     <StateDot tone={life ? "nomatch" : severe ? "chef" : "quiet"} className="relative top-[-1px]" />

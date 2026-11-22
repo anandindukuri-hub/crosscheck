@@ -25,7 +25,7 @@ const sameDish = (a: string, b: string) => {
 
 // Reconfirmed only when today's answers match outright, nothing that passed has slipped, the dishes are
 // the ones on the note and the kitchen clearly says the note is on the booking. A reviewed lane whose
-// answers are again clear but unverified waits at needs_review until Anand reads today's quotes.
+// answers are again clear but unverified waits at needs_review until the user reads today's quotes.
 // Anything an earlier reconfirm in this lane found keeps it from ever counting as reconfirmed.
 export function compareReconfirm(
   before: LaneResult,
@@ -68,7 +68,7 @@ export function reconfirmFailure(today: LaneResult, jevFailed: boolean): string[
   return null;
 }
 
-// labels of today's quoted checks Anand has not ticked yet; nothing to read never counts as read
+// labels of today's quoted checks the user has not ticked yet; nothing to read never counts as read
 export function missingTicks(today: LaneResult, keys: string[]): string[] {
   const quoted = today.checks.filter((c) => c.quote);
   if (!quoted.length) return ["no quotes from today"];

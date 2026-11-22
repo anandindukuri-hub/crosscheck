@@ -7,7 +7,7 @@ import type { CheckInstance, ChoiceDecision, ClaudeJudgement, Cuisine, Decisions
 export const HERO: Diner[] = [
   {
     id: "g1",
-    label: "Anand",
+    label: "Alex",
     restrictions: [
       { kind: "allergy", allergen: "crustacean", severity: "severe" },
       { kind: "allergy", allergen: "mollusk", severity: "severe" },
@@ -127,16 +127,16 @@ export const CASES: Case[] = [
   { id: "myth", title: "Staff says frying kills allergens", cuisine: "american", expect: "not_matched", globals: { misconception: 0.98 } },
   { id: "myth_maybe", title: "Possible allergy myth", cuisine: "american", expect: "needs_chef", fidelity: "verified", globals: { misconception: 0.4 } },
   { id: "cannot", title: "Kitchen says it cannot accommodate", cuisine: "thai", expect: "not_matched", globals: { accommodate: "cannot" } },
-  { id: "no_dishes", title: "No dishes named for Guest 2", cuisine: "thai", expect: "needs_chef", fidelity: "verified", dishes: "Anand: tofu pad see ew with no oyster sauce | Guest 2: not asked" },
+  { id: "no_dishes", title: "No dishes named for Guest 2", cuisine: "thai", expect: "needs_chef", fidelity: "verified", dishes: "Alex: tofu pad see ew with no oyster sauce | Guest 2: not asked" },
   {
     id: "relay_note", title: "Host says they checked with the chef", cuisine: "thai", expect: "needs_chef", fidelity: "verified",
     over: { "fryer:peanut": { option: "dedicated", words: "Separate fryer, nothing with peanuts goes in it", who: "host, after checking with the chef" } },
   },
   {
-    id: "claude_one_guest", title: "Claude and Fo list dishes for Anand only", cuisine: "thai", expect: "needs_chef", fidelity: "verified",
-    claudeDishes: [{ diner: "Anand", dishes: ["tofu pad see ew with no oyster sauce"] }], dishes: "Anand: tofu pad see ew with no oyster sauce",
+    id: "claude_one_guest", title: "Claude and Fo list dishes for Alex only", cuisine: "thai", expect: "needs_chef", fidelity: "verified",
+    claudeDishes: [{ diner: "Alex", dishes: ["tofu pad see ew with no oyster sauce"] }], dishes: "Alex: tofu pad see ew with no oyster sauce",
   },
-  { id: "dishes_not_discussed", title: "Dishes for Guest 2 'not discussed'", cuisine: "thai", expect: "needs_chef", fidelity: "verified", dishes: "Anand: tofu pad see ew with no oyster sauce | Guest 2: not discussed" },
+  { id: "dishes_not_discussed", title: "Dishes for Guest 2 'not discussed'", cuisine: "thai", expect: "needs_chef", fidelity: "verified", dishes: "Alex: tofu pad see ew with no oyster sauce | Guest 2: not discussed" },
   { id: "readback_fix", title: "Staff corrected the read back", cuisine: "mexican", expect: "needs_chef", fidelity: "verified", globals: { readback: "corrected_or_contradicted" } },
   { id: "ai_receptionist", title: "AI receptionist answered", cuisine: "italian", expect: "no_answer", globals: { outcome: "automated_only" }, outcomeRaw: "automated system only" },
   { id: "declined", title: "Staff declined the AI call", cuisine: "pizza", expect: "declined", globals: { outcome: "declined" }, outcomeRaw: "declined" },

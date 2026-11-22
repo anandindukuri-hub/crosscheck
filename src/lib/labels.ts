@@ -90,7 +90,7 @@ export function needTags(d: Pick<Diner, "restrictions">): string[] {
 
 export const shortNeeds = (d: Pick<Diner, "restrictions">) => needTags(d).join(", ");
 
-// "Anand" -> "A", "Guest 2" -> "G2", "Mary Ann" -> "MA"
+// "Alex" -> "A", "Guest 2" -> "G2", "Mary Ann" -> "MA"
 export function initials(label: string) {
   const t = label.trim();
   const g = /^guest\s*(\d+)$/i.exec(t);

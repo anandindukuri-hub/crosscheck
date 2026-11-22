@@ -22,7 +22,7 @@ const SAMPLE = {
   diners: [
     {
       id: "g1",
-      label: "Anand",
+      label: "Alex",
       restrictions: [
         { kind: "allergy", allergen: "crustacean", severity: "severe" },
         { kind: "allergy", allergen: "mollusk", severity: "severe" },
@@ -79,7 +79,7 @@ export function SetupFlow() {
   const rows = [
     { name: "Your phone", line: "Test calls and the practice call ring it.", ok: s.keys.testPhone },
     { name: "Fo", line: "Makes the calls to each kitchen.", ok: s.fo.signedIn, okWord: "Connected", missingWord: "Not connected" },
-    { name: "Answer checks", line: "Claude and Jev read every answer.", ok: checks, okWord: "Set up", missingWord: "Not set up" },
+    { name: "Answer checks", line: "Jev reads every answer. Claude reads too when Jev is unsure.", ok: checks, okWord: "Set up", missingWord: "Not set up" },
   ];
   const missing = rows.filter((r) => !r.ok).length;
   const canPractice = s.keys.claude && s.keys.testPhone;

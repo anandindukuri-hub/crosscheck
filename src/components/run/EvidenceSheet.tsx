@@ -21,7 +21,7 @@ import { BookConfirm, BookFooter, chefCalling, hasActions, LaneActions } from ".
 import { OrderOnly } from "./evidence/OrderOnly";
 import { BookingStatus, ReconfirmStatus } from "./evidence/Status";
 import { ScriptView } from "./ScriptView";
-import { DECIDING_LINE, isBooked, laneFlags, liveStep, onCallId, ringState, type LaneView } from "./laneState";
+import { isBooked, laneFlags, liveStep, onCallId, ringState, type LaneView } from "./laneState";
 import { wordColor } from "./LaneRow";
 import { bySeverity, fmtClock, laneNotes, pctText, readBackBy, whenTime } from "./plain";
 import { useLaneAct } from "./useLaneAct";
@@ -212,7 +212,7 @@ function LaneSheet({ run, lanes, lane, open, bookId, scripts, onChange, onClose,
                   <Spinner />
                   Checking the answers
                 </p>
-                <p className="type-footnote mt-2 text-ink-2">{DECIDING_LINE}. Nothing can be booked until both finish.</p>
+                <p className="type-footnote mt-2 text-ink-2">Jev has read each answer and Claude is reading them too. Nothing can be booked until Claude finishes.</p>
               </section>
             )}
 
@@ -256,7 +256,7 @@ function LaneSheet({ run, lanes, lane, open, bookId, scripts, onChange, onClose,
                 {good && !booked && (
                   <p className="type-body text-ink">
                     {r.state === "matched" ? `All ${r.checks.length} checks passed for the dishes the kitchen suggested.` : "The answers look clear. Read each quote, then book."}
-                    {r.state === "matched" && <span className="text-ink-2"> Claude and Jev read every answer the same way. {readBackBy(lane)} heard Fo repeat the answers and said they were right.</span>}
+                    {r.state === "matched" && <span className="text-ink-2"> Every answer was first hand, with no hedging. {readBackBy(lane)} heard Fo repeat the answers and said they were right.</span>}
                   </p>
                 )}
                 {good && <OrderOnly diners={run.diners} r={r} />}

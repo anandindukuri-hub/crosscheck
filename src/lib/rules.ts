@@ -12,9 +12,9 @@ import type {
   ParsedReport,
 } from "./types";
 
-// Anand's rule: a check passes only at 0.9 or higher. Yes/no questions use the calibrated cutoffs below.
+// The rule: a check passes only at 0.9 or higher. Yes/no questions use the calibrated cutoffs below.
 export const THRESHOLD = 0.9;
-// Calibrated on live Jev output (10/18, Anand approved): clean answers score 0.03 to 0.08 on the hedge
+// Calibrated on live Jev output (10/18): clean answers score 0.03 to 0.08 on the hedge
 // question and 0.06 to 0.16 on the myth question; a real "I think" hedge scored 0.98.
 export const HEDGE_MAX = 0.2;
 export const MISCONCEPTION_CHEF = 0.3;

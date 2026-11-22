@@ -83,7 +83,7 @@ export async function callFo(
       g.__ccFo = undefined;
       out = await once();
     }
-    // scrub keeps other Fo conversations (Anand's private chats) and call links out of the trace
+    // scrub keeps other Fo conversations (the user's private chats) and call links out of the trace
     await trace({ ...where, actor: "fo", action: tool, input: args, output: scrub ? scrub(out.raw, out.isError) : out.raw, ms: Date.now() - t0, ok: !out.isError });
     return out;
   } catch (e) {

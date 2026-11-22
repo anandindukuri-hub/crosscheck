@@ -26,7 +26,7 @@ export type Restriction = z.infer<typeof Restriction>;
 
 export const Diner = z.object({
   id: z.string().min(1).max(20),
-  label: z.string().min(1).max(40), // what Fo and the kitchen hear, e.g. "Anand" or "Guest 2"
+  label: z.string().min(1).max(40), // what Fo and the kitchen hear, e.g. "Alex" or "Guest 2"
   restrictions: z.array(Restriction).min(1),
 });
 export type Diner = z.infer<typeof Diner>;
@@ -165,7 +165,7 @@ export type Reconfirm = {
   at: string;
   reasons: string[];
   result?: LaneResult; // the fresh decision on today's answers; lane.result is never overwritten
-  reviewedAt?: string; // needs_review only: when Anand ticked every quote from today
+  reviewedAt?: string; // needs_review only: when the user ticked every quote from today
 };
 
 export type Lane = {
@@ -173,7 +173,7 @@ export type Lane = {
   runId: string;
   restaurant: Restaurant;
   phase: "call" | "callback" | "booking" | "reconfirm";
-  agreed: boolean; // live mode: Anand pre asked this restaurant and it said yes to an AI call
+  agreed: boolean; // live mode: the user pre asked this restaurant and it said yes to an AI call
   replayCase: string | null;
   kitchenEmail: string | null;
   pending: { message: string; conversationId: string | null; newConversation: boolean; uncertain?: boolean } | null; // queued, not sent yet. uncertain: ask_fo threw, so Fo may already have it
@@ -184,7 +184,7 @@ export type Lane = {
   reports: { kind: "call" | "callback" | "reconfirm"; text: string; at: string }[];
   result: LaneResult | null;
   callbacks: number;
-  booking: { status: "requested" | "needs_you" | "done" | "failed"; text: string; at: string; note?: string } | null; // note: what Anand said or must do
+  booking: { status: "requested" | "needs_you" | "done" | "failed"; text: string; at: string; note?: string } | null; // note: what the user said or must do
   waitingOn?: string | null; // the Fo reply a wait started from, so a Resume that reads it again never waits twice
   fromMemory?: { runId: string; decidedAt: string } | null; // matched from kitchen memory, no call made
   reconfirm?: Reconfirm | null;

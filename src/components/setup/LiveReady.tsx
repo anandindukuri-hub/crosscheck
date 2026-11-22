@@ -11,7 +11,7 @@ export function LiveReady() {
   const { fo, keys, live } = data;
   const rows = [
     { name: "Fo", ok: fo.signedIn && fo.tools.length >= 5, okWord: "Connected", missingWord: "Not connected", line: "Makes the calls." },
-    { name: "Answer checks", ok: keys.claude && keys.jev, okWord: "Set up", missingWord: "Not set up", line: "Claude and Jev read every answer." },
+    { name: "Answer checks", ok: keys.claude && keys.jev, okWord: "Set up", missingWord: "Not set up", line: "Jev reads every answer. Claude reads too when Jev is unsure." },
     { name: "Practice call", ok: keys.fidelity === "verified", okWord: "Passed", missingWord: "Not passed", line: "Until it passes, a match waits for you to read each answer." },
     {
       name: "Other real runs",

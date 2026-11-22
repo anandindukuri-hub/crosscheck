@@ -137,7 +137,7 @@ function isReport(t: string) {
   return Object.values(p.answers).some((a) => a.words) || /voicemail|declined|accommodate|busy|automated|no answer/i.test(outcome);
 }
 
-// What a finished Fo turn means for the lane. Unknown replies go to Anand, never to the checks.
+// What a finished Fo turn means for the lane. Unknown replies go to the user, never to the checks.
 export function classifyFoReply(text: string): FoReplyKind {
   const t = text.trim();
   if (!t) return "other";

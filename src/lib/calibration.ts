@@ -3,9 +3,9 @@ import { parseReport } from "./report";
 import type { CalibrationSignals } from "./settings";
 import type { CheckInstance, Run, Station } from "./types";
 
-// The practice call: Anand plays the kitchen and reads these lines. Three of them carry a trap
+// The practice call: the user plays the kitchen and reads these lines. Three of them carry a trap
 // (a hedge, a relay, a shared fryer). Fo's report must keep all three word for word. Until it does, every match
-// waits for his review.
+// waits for the user's review.
 export const HEDGE_KEY = "hidden:peanut";
 export const SHARED_KEY = "fryer:shellfish";
 export const RELAY_KEY = "surfaces:peanut";
@@ -78,7 +78,7 @@ export function calibrationLines(checks: CheckInstance[]): CalibrationLines {
   }
   return {
     opener: "Sure, this is the chef. Go ahead and take notes.",
-    dishes: "Anand can have the tofu pad see ew with no oyster sauce. Guest 2 can have the chicken fried rice.",
+    dishes: "Alex can have the tofu pad see ew with no oyster sauce. Guest 2 can have the chicken fried rice.",
     answers,
     groups: groupLines(checks, answers),
     readback: "Yes, that's right.",

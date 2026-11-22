@@ -73,7 +73,7 @@ export async function laneConversation(run: Run, lane: Lane): Promise<FoTurn[]> 
 }
 
 // Check Fo's conversations: every Fo conversation started since this run began, sorted into this run's kitchens and the
-// rest. Only counts leave this function: the rest are Anand's own chats with Fo and are never read or named
+// rest. Only counts leave this function: the rest are the user's own chats with Fo and are never read or named
 export async function callCheck(run: Run, lanes: Lane[]) {
   notInReplay(run);
   const ours = new Set(lanes.map((l) => l.conversationId).filter(Boolean) as string[]);
@@ -89,7 +89,7 @@ export async function callCheck(run: Run, lanes: Lane[]) {
   return { ...count(r.raw), kitchens: ours.size };
 }
 
-// Only this run's own lane conversations. Everything else in the list is Anand's private chats with Fo
+// Only this run's own lane conversations. Everything else in the list is the user's private chats with Fo
 // and never leaves this function or reaches the trace.
 export async function runConversations(run: Run, lanes: Lane[]) {
   notInReplay(run);

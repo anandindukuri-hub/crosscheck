@@ -334,7 +334,7 @@ export async function createRun(input: NewRunInput, opts: { purpose?: Run["purpo
   return run;
 }
 
-// Anand plays the kitchen on his own phone and reads calibrationLines(); the report proves Fo keeps hedges
+// The user plays the kitchen on their own phone and reads calibrationLines(); the report proves Fo keeps hedges
 export function createCalibrationRun() {
   return createRun({ mode: "test", when: "Calibration test call", partySize: 2, diners: HERO, restaurantIds: ["test-thai"], bookingName: HERO[0].label, stopAtFirstMatch: false }, { purpose: "calibration" });
 }
@@ -396,7 +396,7 @@ function noCall(lane: Lane | undefined) {
 // What every real Fo call needs before it can go out
 function assertCanCall(run: Run, lanes: Lane[], agreedIds: string[]) {
   if (run.mode === "replay" || !lanes.length) return;
-  if (!env.anthropicKey()) throw new UserError("Add ANTHROPIC_API_KEY to .env.local before any call. Claude weighs every answer.");
+  if (!env.anthropicKey()) throw new UserError("Add ANTHROPIC_API_KEY to .env.local before any call. Claude reads the answers when Jev is unsure or unavailable.");
   if (run.mode === "test" && !env.testPhone()) throw new UserError("Add FO_TEST_PHONE (your own number) to .env.local for test runs.");
   const missing = agreedMissing(run.mode, lanes, agreedIds);
   if (missing) throw new UserError(missing);
@@ -823,7 +823,7 @@ async function bookingDecision(runId: string, laneId: string, out: TurnOutcome):
   }
 }
 
-// Not a clear booked: Anand reads Fo's exact words and taps Fo booked it or Not booked
+// Not a clear booked: the user reads Fo's exact words and taps Fo booked it or Not booked
 async function askBooked(runId: string, laneId: string, out: Pick<TurnOutcome, "kind" | "text">, why: string) {
   await mutate(runId, laneId, (l) => bookedCard(l, now(), why, out.text));
 }
@@ -833,7 +833,7 @@ async function decide(runId: string, laneId: string, text: string) {
   const lane = await mutate(runId, laneId, (l) => {
     l.status = "deciding";
     l.preview = null;
-    l.progress = l.phase === "reconfirm" ? "Claude and Jev are weighing today's answers" : "Claude and Jev are weighing the answers";
+    l.progress = l.phase === "reconfirm" ? "Weighing today's answers" : "Weighing the answers";
     l.reports.push({ kind: l.phase === "callback" || l.phase === "reconfirm" ? l.phase : "call", text, at: now() });
   });
   if (!run) throw new Error("run not found");
@@ -879,8 +879,9 @@ export function withOpening(result: LaneResult, text: string): LaneResult {
   return { ...result, reasons: result.reasons.map((r) => (r === "No one answered" ? `Closed until ${m[1].trim()}. Try them again after they open.` : r)) };
 }
 
-// Claude reads the report, Jev decides each question; Claude alone only when Jev is missing or fails.
-// A structured report goes to both at once. A freeform one goes to Claude first, since Jev needs Claude's quotes
+// Jev decides each question. Claude decides alone only when Jev is missing or fails.
+// A structured report goes to Jev first. Claude reads it too only when Jev cannot settle the kitchen on its own.
+// A freeform one goes to Claude first, since Jev needs Claude's quotes
 async function weigh(run: Run, lane: Lane, relevant: CheckInstance[], parsed: ParsedReport, text: string, onJev?: (d: Decisions) => Promise<unknown>) {
   const runId = run.id;
   const laneId = lane.id;
@@ -1210,7 +1211,7 @@ export async function resume(runId: string, laneId: string) {
     await enqueueLane(runId, laneId, p.message, { conversationId: p.conversationId, newConversation: p.newConversation });
     return;
   }
-  // ask_fo threw and there is no conversation to look in: never resend on our own, Anand checks his Fo app
+  // ask_fo threw and there is no conversation to look in: never resend on our own, the user checks their Fo app
   if (plan === "ask_resend" && p) return askSendAgain(runId, laneId);
   // ask_fo threw: look for the message in its conversation first and only send it if Fo never got it
   if (plan === "check_sent" && p?.conversationId) {
@@ -1249,7 +1250,7 @@ export async function resume(runId: string, laneId: string) {
     return;
   }
   if (!lane.conversationId) {
-    // a booking with no conversation to read back: Anand says whether it is booked instead of a dead end
+    // a booking with no conversation to read back: the user says whether it is booked instead of a dead end
     if (lane.phase === "booking" && lane.booking?.status === "requested") {
       await mutate(runId, laneId, (l) => bookedCard(l, now(), "CrossCheck cannot follow this booking in Fo. Check your Fo app.", null));
       return maybeCount(runId);
@@ -1264,7 +1265,7 @@ export async function resume(runId: string, laneId: string) {
       l.progress = "Checking in with Fo";
     });
     const out = await resumeTurn(convo, ctx);
-    // the same reply that already ran out the wait: no second long wait, Anand gets Fo's words
+    // the same reply that already ran out the wait: no second long wait, the user gets Fo's words
     if (nothingNew(lane, out)) return stalled(runId, laneId, lane.phase, out);
     await settle(runId, laneId, out, ctx);
   });
@@ -1283,7 +1284,7 @@ export function sendAgainText(l: Pick<Lane, "phase" | "pending">, mask = phoneMa
   return `${UNCERTAIN_SEND[l.phase]}${sent ? `\n\nWhat was sent: "${sent.length > 240 ? `${sent.slice(0, 240)}…` : sent}"` : ""}`;
 }
 
-// the message may already be with Fo, so the lane waits on Anand with a Send again button
+// the message may already be with Fo. The lane waits on the user with a Send again button
 async function askSendAgain(runId: string, laneId: string) {
   await mutate(runId, laneId, (l) => {
     l.status = "needs_you";
@@ -1294,7 +1295,7 @@ async function askSendAgain(runId: string, laneId: string) {
   });
 }
 
-// No conversation to send a follow up to: it stays unsent and Anand answers in the Fo app, then taps Fo has it
+// No conversation to send a follow up to: it stays unsent and the user answers in the Fo app, then taps Fo has it
 async function lostFollowUp(runId: string, laneId: string, message: string, from: string, check: (l: Lane) => void = () => undefined) {
   await mutate(runId, laneId, (l) => {
     check(l);
@@ -1304,7 +1305,7 @@ async function lostFollowUp(runId: string, laneId: string, message: string, from
   await trace({ runId, laneId, actor: "engine", action: "warning", input: { from }, output: "follow up refused: lane has no conversationId", ok: false });
 }
 
-// Anand checked his Fo app and the message is not there: send it once more
+// The user checked their Fo app and the message is not there: send it once more
 export async function sendAgain(runId: string, laneId: string) {
   const run = await loadRun(runId);
   const lane = await loadLane(runId, laneId);
@@ -1330,7 +1331,7 @@ export async function sendAgain(runId: string, laneId: string) {
   }
 }
 
-// Anand found the lost message in his Fo app: check in on its conversation instead of sending it twice
+// The user found the lost message in their Fo app: check in on its conversation instead of sending it twice
 export async function foHasIt(runId: string, laneId: string) {
   const run = await loadRun(runId);
   const lane = await loadLane(runId, laneId);
@@ -1364,7 +1365,7 @@ export async function foHasIt(runId: string, laneId: string) {
   }
 }
 
-// Fo's booking reply was not a clear yes: Anand says whether the table is booked
+// Fo's booking reply was not a clear yes: the user says whether the table is booked
 export async function confirmBooking(runId: string, laneId: string, booked: boolean) {
   const lane = await loadLane(runId, laneId);
   if (!lane) throw new UserError("Not found");
@@ -1540,7 +1541,7 @@ function reconfirmBlocked(status: string | undefined) {
   return "Today's reconfirm already finished. A new call cannot replace its result.";
 }
 
-// Today's answers were clear but unverified: Anand ticks every quote from today before it counts
+// Today's answers were clear but unverified: the user ticks every quote from today before it counts
 export async function confirmReconfirmReview(runId: string, laneId: string, keys: string[]) {
   const lane = await loadLane(runId, laneId);
   if (!lane) throw new UserError("Not found");
@@ -1612,7 +1613,7 @@ async function replayPreview(run: Run, laneId: string, report: string, kind: "ca
   await mutate(run.id, laneId, (l) => {
     l.reports.push({ kind, text: report, at: now() });
     l.status = "deciding";
-    l.progress = "DEV REPLAY: Claude and Jev are weighing the answers";
+    l.progress = "DEV REPLAY: weighing the answers";
   });
   await sleep(700);
   await mutate(run.id, laneId, (l) => void showPreview(l, preview));

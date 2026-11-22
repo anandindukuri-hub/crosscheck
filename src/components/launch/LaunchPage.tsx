@@ -101,10 +101,10 @@ export function LaunchPage() {
             <div className={`${styles.container} ${styles.grid}`}>
               <Reveal className={styles.decisionHead}>
                 <p className={styles.eyebrow}>The decision</p>
-                <h2 id="decision-title" className={styles.h2}>
-                  Claude and Jev read every answer.
+                <h2 id="decision-title" className={`${styles.h2} ${styles.lines2}`}>
+                  <span>Jev reads every answer.</span> <span>Claude reads too when Jev is unsure.</span>
                 </h2>
-                <p className={styles.aside}>Claude, Anthropic’s AI, reads what the kitchen said. Jev, TypeSafe AI’s scoring model, checks how sure it heard right. Both must agree.</p>
+                <p className={styles.aside}>Jev, TypeSafe AI’s scoring model, checks how sure it heard each answer right. When Jev is unsure, Claude, Anthropic’s AI, reads the kitchen’s words too. Then a check passes only if both agree.</p>
               </Reveal>
               <div>
                 <Decision />

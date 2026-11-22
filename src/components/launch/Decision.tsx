@@ -23,7 +23,7 @@ const BEATS = [
     sure: 0.97,
     heard: "right",
     color: "#248a3d",
-    lead: "Both heard “no peanut oil.” That fits your table.",
+    lead: "The answer was a clear “no peanut oil.” That fits your table.",
     word: "Matched.",
     explain: "97% is how sure CrossCheck is that it heard the chef right. It is not a promise the food has no peanut.",
   },

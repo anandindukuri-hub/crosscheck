@@ -8,7 +8,7 @@ const SECTIONS = [
     id: "privacy",
     title: "Your allergy details",
     body: [
-      "Allergies and diets you enter go to Fo (Wajo’s AI caller) to make the calls, to Claude and Jev (the two AI models that check each answer) and to the kitchens you approve, on the call and in the allergy note.",
+      "Allergies and diets you enter go to Fo (Wajo’s AI caller) to make the calls, to Claude and Jev (the two AI models that check the answers) and to the kitchens you approve, on the call and in the allergy note.",
       "CrossCheck never sells them or uses them for ads.",
       "Each kitchen’s answers are kept with who said them and when. You can read the exact words later. Answers about life threatening and severe allergies expire after 7 days. Answers about mild allergies and diets expire after 30.",
     ],

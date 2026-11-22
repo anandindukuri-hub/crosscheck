@@ -171,7 +171,7 @@ const same = (s: string) => s.toLowerCase().replace(/[“”]/g, '"').replace(/[
 
 // Did any user turn in this conversation carry this message? null unless at least one user turn could be
 // read, so an unknown shape (only "fo" turns, content blocks) goes to Send again and is never resent on
-// its own. An older identical answer only skips a resend, the safe side: a fresh question comes back to Anand
+// its own. An older identical answer only skips a resend, the safe side: a fresh question comes back to the user
 export function userTurnHas(raw: unknown, message: string): boolean | null {
   const mine = extractTurns(raw).filter((t) => /^(user|human)$/i.test(t.role));
   if (!mine.length) return null;

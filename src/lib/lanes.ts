@@ -85,7 +85,7 @@ export function noConversationStep(l: Lane, message: string, progress: string) {
 
 type TableLane = Pick<Lane, "id" | "restaurant" | "booking">;
 
-// One kitchen per table: another lane's booking that is requested, waiting on Anand or done blocks this one
+// One kitchen per table: another lane's booking that is requested, waiting on the user or done blocks this one
 export function tableBooked(lane: { id?: string }, table: TableLane[]): string | null {
   const other = table.find((o) => o.id !== lane.id && o.booking && o.booking.status !== "failed");
   if (!other?.booking) return null;
@@ -146,7 +146,7 @@ export function bookingStep(kind: TurnOutcome["kind"], text = "", jev: ChoiceDec
   return "confirm";
 }
 
-// Fo's booking reply was not a clear yes, so Anand says whether the table is booked
+// Fo's booking reply was not a clear yes. The user says whether the table is booked
 export const bookingConfirmShown = (lane: Pick<Lane, "status" | "phase" | "booking">) =>
   lane.status === "needs_you" && lane.phase === "booking" && lane.booking?.status === "needs_you";
 
@@ -222,7 +222,7 @@ const TOOK_IT = "You stopped here. Fo already had this booking request and may h
 export const NOT_TOLD = "CrossCheck could not tell Fo to stop. Fo may still book this table. Stop it in your Fo app if you need to.";
 export const MAYBE_HAS_IT = "You stopped here. Fo may already have this request. Stop it in your Fo app if you need to.";
 
-// Anand saw the lost message in his Fo app: follow its conversation or leave the step to the Fo app when
+// The user saw the lost message in their Fo app: follow its conversation or leave the step to the Fo app when
 // CrossCheck never learned the conversation. That ends on the card, so a second booking never goes out by itself
 export function foHasItStep(l: Lane, at: string): "check_in" | "ended" {
   const p = l.pending;
@@ -253,7 +253,7 @@ export function foHasItStep(l: Lane, at: string): "check_in" | "ended" {
 }
 
 // "No, stop" ends the lane. While booking Fo has or may have the request, so the lane ends on the card
-// and Anand says whether the table is booked. Returns true when it ends on the card
+// and the user says whether the table is booked. Returns true when it ends on the card
 export function stopLane(l: Lane, at: string): boolean {
   const lost = !!l.pending?.uncertain;
   // read before pending is cleared: Fo took a go ahead, may have a lost send or warned, so a call may be live
@@ -288,7 +288,7 @@ export function stopNotTold(l: Lane) {
 
 const same = (s: string) => s.toLowerCase().replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/\s+/g, " ").trim();
 
-// Resume read back the very reply the lane already waited on: Fo has nothing new, so Anand decides
+// Resume read back the very reply the lane already waited on: Fo has nothing new. The user decides
 // instead of the queue being held for another long wait
 export const nothingNew = (lane: Pick<Lane, "status" | "waitingOn">, out: Pick<TurnOutcome, "kind" | "text">) =>
   lane.status === "fo_still_working" && !!lane.waitingOn?.trim() && out.kind !== "failed" && out.kind !== "still_working" && same(out.text) === same(lane.waitingOn);
@@ -301,7 +301,7 @@ export const UNCERTAIN_SEND: Record<Lane["phase"], string> = {
 };
 
 // ask_fo is about to take the message: until it answers Fo may have it, so a restart mid send looks it up
-// or asks Anand instead of sending it blind. A returned error proves Fo refused it, so it may go again
+// or asks the user instead of sending it blind. A returned error proves Fo refused it, which means it may go again
 export function sendingStep(l: Pick<Lane, "pending">) {
   if (l.pending) l.pending.uncertain = true;
 }
@@ -309,11 +309,11 @@ export function refusedStep(l: Pick<Lane, "pending">) {
   if (l.pending) delete l.pending.uncertain;
 }
 
-// Fo may have the message after ask_fo threw, so only Anand can send it again
+// Fo may have the message after ask_fo threw. Only the user can send it again
 export const sendAgainShown = (lane: Pick<Lane, "status" | "pending">) => lane.status === "needs_you" && !!lane.pending?.uncertain;
 
 // A saved message that never reached Fo is sent again, never swapped for whatever Fo said last.
-// One that may have reached Fo is looked up in its conversation first or left to Anand when there is none
+// One that may have reached Fo is looked up in its conversation first or left to the user when there is none
 export function resumePlan(
   lane: Pick<Lane, "pending" | "status" | "reports" | "conversationId" | "phase">,
 ): "resend" | "check_sent" | "ask_resend" | "decide" | "restart_call" | "no_conversation" | "check_fo" {

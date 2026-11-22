@@ -5,7 +5,7 @@ import { createCalibrationRun } from "@/lib/engine";
 import { fail, ok } from "@/lib/http";
 import { fidelityStatus } from "@/lib/settings";
 
-// GET: what Anand will say on the calibration call, plus where fidelity stands now
+// GET: what the user will say on the calibration call, plus where fidelity stands now
 export async function GET() {
   try {
     return ok({ lines: calibrationLines(buildChecks(HERO, "thai")), ...(await fidelityStatus()) });

@@ -79,7 +79,7 @@ export function lowestConfidence(r: LaneResult | null | undefined): number | nul
 export type RingState = { tone: Tone | "work" | "wait"; word: string; value: number | null; working: boolean; pulse: boolean; booked: boolean; glyph?: RingGlyph; dot?: "hollow" | "you" };
 
 // the line under "Checking the answers", on the row and in the summary
-export const DECIDING_LINE = "Claude and Jev are reading each answer";
+export const DECIDING_LINE = "Reading each answer";
 
 // One vocabulary for a kitchen Fo is on, shared by its row and the Live Activity pill. timer: none before anyone picks
 // up, run while the kitchen is on the line, freeze once the call is over and Fo writes the report. replay: a sample

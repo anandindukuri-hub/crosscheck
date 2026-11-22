@@ -28,7 +28,7 @@ const SAMPLE: PassProps = {
   guests: [
     { name: "Guest 2", needs: [{ severity: "Life threatening", text: "Peanut allergy" }], dish: "chicken pad see ew" },
     {
-      name: "Anand",
+      name: "Alex",
       needs: [
         { severity: "Severe", text: "Shellfish allergy" },
         { severity: null, text: "No beef, no contact", diet: { label: "Diet", line: "No beef. Nothing cooked with or next to beef." } },

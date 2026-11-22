@@ -8,9 +8,9 @@ import { styles } from "./styles";
 // the app's own opening line, word for word, then the replay's Tamarind Table fryer answer, so a viewer who opens the app
 // hears the same call
 const LINES = [
-  { who: "Fo", words: "Hi, this is an AI assistant calling for Anand, who would like to eat at your restaurant. May I ask the chef or manager a few quick allergy questions? Is it OK if I take notes?" },
+  { who: "Fo", words: "Hi, this is an AI assistant calling for Alex, who would like to eat at your restaurant. May I ask the chef or manager a few quick allergy questions? Is it OK if I take notes?" },
   { who: "Kitchen", words: "Sure, this is the chef. Go ahead." },
-  { who: "Fo", words: "Anand has a severe shellfish allergy. Does the fryer for your fries ever cook shellfish?" },
+  { who: "Fo", words: "Alex has a severe shellfish allergy. Does the fryer for your fries ever cook shellfish?" },
   { who: "Kitchen", words: "We have a separate fryer just for fries. Shellfish never goes in that oil." },
 ] as const;
 

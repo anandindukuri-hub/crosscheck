@@ -191,7 +191,7 @@ export function LivePhone({ still }: { still?: "booked" } = {}) {
                 Table for 2
                 <span className={styles.subGuests}>
                   <br />
-                  Guest 2: peanut · Anand: shellfish, no beef
+                  Guest 2: peanut · Alex: shellfish, no beef
                 </span>
               </p>
 
@@ -226,7 +226,7 @@ export function LivePhone({ still }: { still?: "booked" } = {}) {
                         <span className={styles.bestLabel}>Best match</span>
                         <span className={styles.bestName}>{best.name}</span>
                         <span className={styles.bestLine}>All 9 checks passed for the dishes the kitchen suggested.</span>
-                        <span className={styles.bestSure}>Claude and Jev read every answer the same way.</span>
+                        <span className={styles.bestSure}>Every answer was first hand, with no hedging.</span>
                       </span>
                     </div>
                     <div className={styles.bookBtn}>Book {best.name}</div>

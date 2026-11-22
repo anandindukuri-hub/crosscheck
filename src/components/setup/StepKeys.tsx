@@ -27,7 +27,7 @@ export function Rows({ children, className = "" }: { children: ReactNode; classN
 }
 
 const KEYS = [
-  { id: "claude", name: "Claude key", env: "ANTHROPIC_API_KEY", where: "platform.claude.com", href: "https://platform.claude.com", why: "Reads every answer Fo brings back." },
+  { id: "claude", name: "Claude key", env: "ANTHROPIC_API_KEY", where: "platform.claude.com", href: "https://platform.claude.com", why: "Reads the answers when Jev is unsure or unavailable." },
   { id: "jev", name: "Jev key", env: "TYPESAFE_API_KEY", where: "the Jev console", href: "https://console.typesafe.ai", why: "Scores how sure it is of each answer." },
   { id: "testPhone", name: "Your phone", env: "FO_TEST_PHONE", where: null, href: null, why: "Test calls and the practice call ring it. You play the kitchen." },
 ] as const;
